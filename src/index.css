@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap');
+@import 'tippy.js/dist/tippy.css';
+@import 'tippy.js/animations/perspective.css';
+@import "tailwindcss";
+
+.tippy-box[data-theme~='bot'] {
+  background: var(--color-button, #1a73e8);
+  color: var(--color-button-text, #fff);
+  border-radius: 15px;
+  font-size: 1rem;
+}
+.tippy-box[data-theme~='bot'] .tippy-arrow {
+  color: var(--color-button, #1a73e8);
+}
+
+
+:root {
+  --color-loginbg: #101929;
+  --color-primary: #121212;
+  --color-subtitle: #888888;
+  --color-title: #E0E0E0;
+  --color-button: #ffffff;
+  --color-button-text: #0f1724;
+  --color-button-cancel: #2b2b2b;
+  --color-input: #121212;
+  --color-secondary: #2b2b2b;
+  --font-global: "Poppins", sans-serif;
+  --color-tab-indicator: #000000;
+  --color-tab-indicator-text: #ffffff;
+}
+
+[data-theme="light"] {
+  --color-loginbg: #f6f8fb; 
+  --color-primary: #FBFBFE;
+  --color-subtitle: #697477;
+  --color-title: #2A3B47;
+  --color-button: #1083D6;
+  --color-border-cards: #c4c2c2;
+  --color-button-text: #ffffff;
+  --color-button-cancel: #acacac;
+  --color-input: #ffffff;
+  --color-secondary: #e6e9ef;
+  --color-tab-indicator: #1083D6; 
+  --color-tab-indicator-text: #FFFF;
+}
+
+html{
+  scrollbar-gutter: stable;
+}
+
+body{
+  font-family: var(--font-global);
+  background-color: var(--color-primary);
+  color: var(--color-title);
+}
+
+.bg-primary { background-color: var(--color-primary) !important; }
+.bg-secondary { background-color: var(--color-secondary) !important; }
+.text-title { color: var(--color-title) !important; }
+.text-subtitle { color: var(--color-subtitle) !important; }
+.border-secondary { border-color: var(--color-secondary) !important; }
+.hover\:bg-secondary:hover { background-color: var(--color-secondary) !important; }
+.bg-button { background-color: var(--color-button) !important; }
+.text-button { color: var(--color-button-text) !important; }
+.bg-button-cancel { background-color: var(--color-button-cancel) !important; }
+.text-button-cancel { color: var(--color-button-text) !important; }
+
+.bg-input { background-color: var(--color-input) !important; color: var(--color-title) !important; }
+
+select, textarea, input, .bg-input, .bg-input * {
+  background-color: var(--color-input) !important;
+  color: var(--color-title) !important;
+}
+
+select option, select optgroup {
+  background-color: var(--color-input) !important;
+  color: var(--color-title) !important;
+}
+
+select::-ms-expand { display: none; }
+select { appearance: none; -webkit-appearance: none; -moz-appearance: none; }
+
+
+.bg-tab-indicator {
+  background-color: var(--color-tab-indicator) !important;
+}
+.text-tab-indicator {
+  color: var(--color-tab-indicator-text) !important;
+}
+
+.border-button {
+  border-color: var(--color-button) !important;
+}
+
+.border-cards {
+  border-color: var(--color-border-cards) !important;
+}
+
+.hover\:text-title:hover {
+  color: var(--color-title) !important;
+}
