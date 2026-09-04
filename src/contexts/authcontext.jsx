@@ -10,32 +10,62 @@ export const AuthProvider = ({ children }) => {
 
   const cargarPerfil = async (userId) => {
     if (!userId) { setPerfil(null); return null; }
-    const { data, error } = await supabase
-      .from("perfiles")
-      .select("id, nombre_completo, email, telefono, rol, id_empresa")
-      .eq("id", userId)
-      .single();
-    if (error) { console.error("Error cargando perfil:", error.message); setPerfil(null); return null; }
-    setPerfil(data);
-    return data;
+    try {
+      // Timeout de 5 segundos para que la app no quede colgada si Supabase no responde
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("timeout_perfil")), 5000)
+      );
+      const queryPromise = supabase
+        .from("perfiles")
+        .select("id, nombre_completo, email, telefono, rol, id_empresa")
+        .eq("id", userId)
+        .single();
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+      if (error) { console.error("Error cargando perfil:", error.message); setPerfil(null); return null; }
+      setPerfil(data);
+      return data;
+    } catch (err) {
+      console.error("Timeout o error al cargar perfil:", err.message);
+      setPerfil(null);
+      return null;
+    }
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) await cargarPerfil(session.user.id);
-      setLoading(false);
-    });
+    let mounted = true;
+
+    // Inicialización: obtener sesión actual con try/finally para que loading siempre baje
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        setSession(session);
+        if (session?.user) await cargarPerfil(session.user.id);
+      } catch (err) {
+        console.error("Error inicializando auth:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initAuth();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!mounted) return;
       setSession(session);
-      if (session?.user) await cargarPerfil(session.user.id);
-      else setPerfil(null);
+      if (session?.user) {
+        await cargarPerfil(session.user.id);
+      } else {
+        setPerfil(null);
+      }
+      // Garantizar que loading baje si onAuthStateChange dispara antes que initAuth termine
+      if (mounted) setLoading(false);
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -49,7 +79,8 @@ export const AuthProvider = ({ children }) => {
     // Verificar que el usuario sea STAFF (admin/vendedor/cajero). Los clientes NO entran aquí.
     const p = await cargarPerfil(data.user.id);
     if (!p || !["admin", "vendedor", "cajero"].includes(p.rol)) {
-      await supabase.auth.signOut();
+      // scope:'local' para no afectar sesiones de otras apps
+      await supabase.auth.signOut({ scope: "local" });
       return { success: false, error: "Esta cuenta no tiene acceso al panel administrativo." };
     }
     return { success: true, data, perfil: p };
@@ -67,8 +98,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logoutUser = async () => {
-    const { error } = await supabase.auth.signOut();
+    // scope:'local' → solo cierra la sesión en ESTE navegador/app,
+    // sin afectar otras apps abiertas (ej. la tienda cliente)
+    const { error } = await supabase.auth.signOut({ scope: "local" });
     if (error) console.error("Error logout:", error);
+    setSession(null);
     setPerfil(null);
   };
 

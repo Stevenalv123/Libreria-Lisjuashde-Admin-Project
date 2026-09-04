@@ -17,6 +17,7 @@ const ESTADO_BADGE = {
 export default function PedidosWeb() {
   const { pedidos, isLoading, error, aceptarPedido, cambiarEstado } = usePedidosWeb();
   const [activeTab, setActiveTab] = useState("activos");
+  const [busqueda, setBusqueda] = useState("");
 
   const tabs = [
     { key: "activos", label: "Activos", icon: <Clock size={16} /> },
@@ -33,11 +34,20 @@ export default function PedidosWeb() {
   }, [pedidos]);
 
   const visibles = useMemo(() => {
+    let base;
     if (activeTab === "activos") {
-      return pedidos.filter((p) => ["Pendiente", "Confirmado", "Listo"].includes(p.estado));
+      base = pedidos.filter((p) => ["Pendiente", "Confirmado", "Listo"].includes(p.estado));
+    } else {
+      base = pedidos.filter((p) => ["Entregado", "Rechazado"].includes(p.estado));
     }
-    return pedidos.filter((p) => ["Entregado", "Rechazado"].includes(p.estado));
-  }, [pedidos, activeTab]);
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((p) =>
+      (p.numero_orden || "").toLowerCase().includes(q) ||
+      (p.nombre_cliente || "").toLowerCase().includes(q) ||
+      (p.telefono || "").toLowerCase().includes(q)
+    );
+  }, [pedidos, activeTab, busqueda]);
 
   const handleAceptar = async (pedido) => {
     const confirm = await Swal.fire({
@@ -97,6 +107,16 @@ export default function PedidosWeb() {
             <p className="text-subtitle text-s">Pedidos realizados por los clientes desde la tienda web.</p>
           </div>
 
+          <div className="mb-6">
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por N° de orden (P-0001), nombre o teléfono..."
+              className="w-full md:max-w-md bg-secondary/40 border border-secondary rounded-lg px-4 py-2 text-title text-sm outline-none focus:border-title/60"
+            />
+          </div>
+
           {isLoading ? (
             <p className="text-center text-subtitle p-6">Cargando pedidos...</p>
           ) : visibles.length === 0 ? (
@@ -108,7 +128,7 @@ export default function PedidosWeb() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">
-                        <span className="text-title font-bold">Pedido #{p.id_pedido}</span>
+                        <span className="text-title font-bold">Orden {p.numero_orden || `P-${String(p.id_pedido).padStart(4, "0")}`}</span>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ESTADO_BADGE[p.estado] || "bg-secondary text-subtitle"}`}>{p.estado}</span>
                       </div>
                       <span className="text-subtitle text-sm">{p.created_at ? format(new Date(p.created_at), "dd/MM/yyyy HH:mm") : ""}</span>

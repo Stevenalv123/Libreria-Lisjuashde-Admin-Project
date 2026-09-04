@@ -29,7 +29,7 @@ export function usePedidosWeb() {
       const { data, error } = await supabase
         .from("pedidos_web")
         .select(
-          "id_pedido, id_empresa, user_id, nombre_cliente, telefono, email, total, metodo_pago, tipo_entrega, notas, estado, id_venta, created_at, pedidos_web_items ( id_item, id_producto, nombre, cantidad, precio_unitario, imagen )"
+          "id_pedido, numero_orden, id_empresa, user_id, nombre_cliente, telefono, email, total, metodo_pago, tipo_entrega, notas, estado, id_venta, created_at, pedidos_web_items ( id_item, id_producto, nombre, cantidad, precio_unitario, imagen )"
         )
         .eq("id_empresa", empresaId)
         .order("created_at", { ascending: false });

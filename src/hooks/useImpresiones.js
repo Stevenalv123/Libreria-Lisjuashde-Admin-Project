@@ -17,7 +17,7 @@ export function useImpresiones() {
       const { data, error } = await supabase
         .from("trabajos_impresion")
         .select(
-          "id_trabajo, user_id, nombre_cliente, telefono, archivo_nombre, archivo_url, storage_path, modo_color, copias, tamano_papel, notas, precio_estimado, estado, id_venta, created_at"
+          "id_trabajo, numero_orden, user_id, nombre_cliente, telefono, archivo_nombre, archivo_url, storage_path, modo_color, copias, tamano_papel, notas, precio_estimado, estado, id_venta, created_at"
         )
         .order("created_at", { ascending: false });
 

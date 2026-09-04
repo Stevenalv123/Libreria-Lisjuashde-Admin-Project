@@ -20,6 +20,7 @@ const ESTADO_BADGE = {
 export default function Impresiones() {
   const { trabajos, isLoading, error, getDownloadUrl, cambiarEstado, cobrarImpresion } = useImpresiones();
   const [activeTab, setActiveTab] = useState("activos");
+  const [busqueda, setBusqueda] = useState("");
 
   const tabs = [
     { key: "activos", label: "Activos", icon: <Clock size={16} /> },
@@ -35,9 +36,17 @@ export default function Impresiones() {
   }, [trabajos]);
 
   const visibles = useMemo(() => {
-    if (activeTab === "activos") return trabajos.filter((t) => ["Pendiente", "Listo"].includes(t.estado));
-    return trabajos.filter((t) => ["Entregado", "Rechazado"].includes(t.estado));
-  }, [trabajos, activeTab]);
+    let base;
+    if (activeTab === "activos") base = trabajos.filter((t) => ["Pendiente", "Listo"].includes(t.estado));
+    else base = trabajos.filter((t) => ["Entregado", "Rechazado"].includes(t.estado));
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter((t) =>
+      (t.numero_orden || "").toLowerCase().includes(q) ||
+      (t.nombre_cliente || "").toLowerCase().includes(q) ||
+      (t.telefono || "").toLowerCase().includes(q)
+    );
+  }, [trabajos, activeTab, busqueda]);
 
   const handleDescargar = async (trabajo) => {
     const url = await getDownloadUrl(trabajo.storage_path);
@@ -106,6 +115,16 @@ export default function Impresiones() {
             <p className="text-subtitle text-s">Archivos enviados por los clientes para imprimir o copiar.</p>
           </div>
 
+          <div className="mb-6">
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por N° de orden (I-0001), nombre o teléfono..."
+              className="w-full md:max-w-md bg-secondary/40 border border-secondary rounded-lg px-4 py-2 text-title text-sm outline-none focus:border-title/60"
+            />
+          </div>
+
           {isLoading ? (
             <p className="text-center text-subtitle p-6">Cargando trabajos...</p>
           ) : visibles.length === 0 ? (
@@ -117,7 +136,7 @@ export default function Impresiones() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">
-                        <span className="text-title font-bold">Trabajo #{t.id_trabajo}</span>
+                        <span className="text-title font-bold">Orden {t.numero_orden || `I-${String(t.id_trabajo).padStart(4, "0")}`}</span>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ESTADO_BADGE[t.estado] || "bg-secondary text-subtitle"}`}>{t.estado}</span>
                       </div>
                       <span className="text-subtitle text-sm">{t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy HH:mm") : ""}</span>
