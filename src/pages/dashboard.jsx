@@ -1,7 +1,8 @@
 import {
     User, LogOut, HardHat, ShoppingCart, UserCheck, Package,
     Users, Wallet, Wrench, FileSpreadsheetIcon, ChartColumn, TrendingUp,
-    Bot, Sun, Moon, Lightbulb, Menu, X, ShoppingBag, Printer
+    Bot, Sun, Moon, Lightbulb, Menu, X, ShoppingBag, Printer,
+    Building2, Monitor, DoorOpen, RotateCcw, ScrollText, ArrowLeftRight
 } from "lucide-react";
 import { useState } from "react";
 import { Outlet, NavLink, Link, useNavigate } from "react-router-dom";
@@ -12,21 +13,30 @@ import BotComponent from "../components/bot";
 import Swal from "sweetalert2";
 
 // Cada enlace declara qué roles pueden verlo.
-const ALL = ["admin", "vendedor", "cajero"];
+// Roles del sistema: superadmin, admin, gerente, cajero, despacho.
+// (Se mantiene "vendedor" por compatibilidad con datos existentes → equiparado a admin.)
+// "superadmin" ve TODOS los enlaces (se agrega automáticamente más abajo).
 const navLinks = [
-    { to: "ventas", label: 'Ventas', icon: ShoppingCart, roles: ALL },
-    { to: "pedidosWeb", label: 'Pedidos Web', icon: ShoppingBag, roles: ["admin", "vendedor"] },
-    { to: "impresiones", label: 'Impresiones', icon: Printer, roles: ["admin", "vendedor"] },
-    { to: "clientes", label: 'Clientes', icon: UserCheck, roles: ["admin", "vendedor"] },
-    { to: "inventario", label: 'Inventario', icon: Package, roles: ["admin", "vendedor"] },
-    { to: "proveedores", label: 'Proveedores', icon: Users, roles: ["admin"] },
-    { to: "cajabancos", label: 'Cajas/Bancos', icon: Wallet, roles: ["admin", "cajero"] },
-    { to: "activosFijos", label: 'Activos Fijos', icon: Wrench, roles: ["admin"] },
-    { to: "gastosFijos", label: 'Gastos Fijos', icon: Lightbulb, roles: ["admin"] },
-    { to: "personal", label: 'Personal', icon: HardHat, roles: ["admin"] },
-    { to: "estadosFinancieros", label: 'Estados Financieros', icon: FileSpreadsheetIcon, roles: ["admin"] },
-    { to: "analisis", label: 'Análisis', icon: ChartColumn, roles: ["admin"] },
-    { to: "proyecciones", key: 'proyecciones', label: 'Proyecciones', icon: TrendingUp, roles: ["admin"] },
+    { to: "ventas", label: 'Ventas', icon: ShoppingCart, roles: ["admin", "vendedor", "gerente", "cajero"] },
+    { to: "pedidosWeb", label: 'Pedidos Web', icon: ShoppingBag, roles: ["admin", "vendedor", "gerente", "despacho"] },
+    { to: "impresiones", label: 'Impresiones', icon: Printer, roles: ["admin", "vendedor", "cajero", "despacho"] },
+    { to: "clientes", label: 'Clientes', icon: UserCheck, roles: ["admin", "vendedor", "gerente"] },
+    { to: "inventario", label: 'Inventario', icon: Package, roles: ["admin", "vendedor", "gerente"] },
+    { to: "proveedores", label: 'Proveedores', icon: Users, roles: ["admin", "vendedor"] },
+    { to: "cajabancos", label: 'Cajas/Bancos', icon: Wallet, roles: ["admin", "vendedor", "cajero"] },
+    { to: "aperturaCierre", label: 'Apertura/Cierre Caja', icon: DoorOpen, roles: ["admin", "vendedor", "cajero"] },
+    { to: "devoluciones", label: 'Devoluciones', icon: RotateCcw, roles: ["admin", "vendedor", "cajero"] },
+    { to: "activosFijos", label: 'Activos Fijos', icon: Wrench, roles: ["admin", "vendedor"] },
+    { to: "gastosFijos", label: 'Gastos Fijos', icon: Lightbulb, roles: ["admin", "vendedor"] },
+    { to: "personal", label: 'Personal', icon: HardHat, roles: ["admin", "vendedor"] },
+    { to: "sucursales", label: 'Sucursales', icon: Building2, roles: ["admin", "vendedor"] },
+    { to: "terminalesPOS", label: 'Terminales POS', icon: Monitor, roles: ["admin", "vendedor"] },
+    { to: "transferencias", label: 'Transferencias', icon: ArrowLeftRight, roles: ["admin", "vendedor"] },
+    { to: "usuarios", label: 'Usuarios', icon: Users, roles: ["admin", "vendedor"] },
+    { to: "estadosFinancieros", label: 'Estados Financieros', icon: FileSpreadsheetIcon, roles: ["admin", "vendedor", "gerente"] },
+    { to: "analisis", label: 'Análisis', icon: ChartColumn, roles: ["admin", "vendedor", "gerente"] },
+    { to: "proyecciones", key: 'proyecciones', label: 'Proyecciones', icon: TrendingUp, roles: ["admin", "vendedor", "gerente"] },
+    { to: "auditoria", label: 'Auditoría', icon: ScrollText, roles: ["admin", "vendedor", "gerente"] },
 ];
 
 // Componente de enlace reutilizable
@@ -47,9 +57,12 @@ const AppLink = ({ to, icon: Icon, label, onClick }) => (
 );
 
 const ROL_LABEL = {
+    superadmin: "Super Administrador",
     admin: "Administrador",
-    vendedor: "Vendedor",
+    gerente: "Gerente",
     cajero: "Cajero",
+    despacho: "Despacho",
+    vendedor: "Vendedor",
 };
 
 export default function Dashboard() {
@@ -60,7 +73,10 @@ export default function Dashboard() {
     const [showBot, setShowBot] = useState(false);
 
     // Filtra los enlaces según el rol del usuario autenticado.
-    const visibleLinks = navLinks.filter(link => !rol || link.roles.includes(rol));
+    // El superadmin ve TODOS los módulos.
+    const visibleLinks = rol === "superadmin"
+        ? navLinks
+        : navLinks.filter(link => !rol || link.roles.includes(rol));
 
     tippy('#bot-button', { content: "Asistente IA", placement: 'left', theme: 'light' });
 

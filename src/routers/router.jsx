@@ -16,6 +16,13 @@ import OnBuilding from '../components/onbuiliding';
 import GastosFijos from '../pages/GastosFijos';
 import EstadosFinancieros from '../pages/estadosfinancieros';
 import Proyecciones from '../pages/proyecciones';
+import Sucursales from '../pages/sucursales';
+import TerminalesPOS from '../pages/terminalesPOS';
+import AperturaCierre from '../pages/aperturaCierre';
+import Devoluciones from '../pages/devoluciones';
+import Usuarios from '../pages/usuarios';
+import Auditoria from '../pages/auditoria';
+import Transferencias from '../pages/transferencias';
 import Login from '../pages/login';
 import ProtectedRoute from './protectedroute';
 
@@ -54,6 +61,13 @@ const router = createBrowserRouter([
               { path: 'analisis', element: <AnalisisFinanciero /> },
               { path: 'reportes', element: <OnBuilding /> },
               { path: 'proyecciones', element: <Proyecciones /> },
+              { path: 'sucursales', element: <Sucursales /> },
+              { path: 'terminalesPOS', element: <TerminalesPOS /> },
+              { path: 'aperturaCierre', element: <AperturaCierre /> },
+              { path: 'devoluciones', element: <Devoluciones /> },
+              { path: 'usuarios', element: <Usuarios /> },
+              { path: 'auditoria', element: <Auditoria /> },
+              { path: 'transferencias', element: <Transferencias /> },
               // Si estás en '/dashboard', redirige a 'ventas'
               { index: true, element: <Navigate to="ventas" replace /> }
             ]

@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
       );
       const queryPromise = supabase
         .from("perfiles")
-        .select("id, nombre_completo, email, telefono, rol, id_empresa")
+        .select("id, nombre_completo, email, telefono, rol, id_empresa, id_sucursal, activo")
         .eq("id", userId)
         .single();
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
@@ -76,22 +76,39 @@ export const AuthProvider = ({ children }) => {
       console.error("Error login:", error);
       return { success: false, error: error.message };
     }
-    // Verificar que el usuario sea STAFF (admin/vendedor/cajero). Los clientes NO entran aquí.
+    // Verificar que el usuario sea STAFF. Los clientes NO entran aquí.
+    // Roles con acceso al panel: superadmin, admin, gerente, cajero, despacho
+    // (se mantiene "vendedor" por compatibilidad con datos existentes).
     const p = await cargarPerfil(data.user.id);
-    if (!p || !["admin", "vendedor", "cajero"].includes(p.rol)) {
+    const ROLES_STAFF = ["superadmin", "admin", "gerente", "cajero", "despacho", "vendedor"];
+    if (!p || !ROLES_STAFF.includes(p.rol)) {
       // scope:'local' para no afectar sesiones de otras apps
       await supabase.auth.signOut({ scope: "local" });
       return { success: false, error: "Esta cuenta no tiene acceso al panel administrativo." };
     }
+    // Bloquear cuentas desactivadas
+    if (p.activo === false) {
+      await supabase.auth.signOut({ scope: "local" });
+      return { success: false, error: "Esta cuenta está desactivada. Contacte al administrador." };
+    }
     return { success: true, data, perfil: p };
   };
 
-  // Registro de nuevo miembro del staff (solo lo usará un admin desde Personal/Usuarios)
-  const signUpStaff = async (email, password, nombre_completo, rol = "vendedor") => {
+  // Registro de nuevo miembro del staff (solo lo usará un admin desde Usuarios).
+  // Nota: supabase.auth.signUp inicia sesión con el nuevo usuario en el navegador;
+  // el módulo de Usuarios se encarga de restaurar la sesión del administrador.
+  const signUpStaff = async (email, password, nombre_completo, rol = "admin", id_sucursal = null) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { nombre_completo, rol } },
+      options: {
+        data: {
+          nombre_completo,
+          rol,
+          id_sucursal: id_sucursal != null ? String(id_sucursal) : "",
+          id_empresa: "1",
+        },
+      },
     });
     if (error) return { success: false, error: error.message };
     return { success: true, data };
