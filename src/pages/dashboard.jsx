@@ -13,30 +13,42 @@ import BotComponent from "../components/bot";
 import Swal from "sweetalert2";
 
 // Cada enlace declara qué roles pueden verlo.
-// Roles del sistema: superadmin, admin, gerente, cajero, despacho.
+// Roles del sistema según documento RF-10:
+//   1. superadmin  → configuración general, usuarios, roles, sucursales, permisos (TODO)
+//   2. admin       → productos, inventario, compras, proveedores, sucursales (operaciones)
+//   3. gerente     → finanzas, estadísticas, ventas (solo consulta), reportes
+//   4. cajero      → ventas, facturación, caja y devoluciones
+//   5. despacho    → consulta y gestión de pedidos
 // (Se mantiene "vendedor" por compatibilidad con datos existentes → equiparado a admin.)
-// "superadmin" ve TODOS los enlaces (se agrega automáticamente más abajo).
+// "superadmin" ve TODOS los enlaces (filtrado automático más abajo).
 const navLinks = [
-    { to: "ventas", label: 'Ventas', icon: ShoppingCart, roles: ["admin", "vendedor", "gerente", "cajero"] },
-    { to: "pedidosWeb", label: 'Pedidos Web', icon: ShoppingBag, roles: ["admin", "vendedor", "gerente", "despacho"] },
-    { to: "impresiones", label: 'Impresiones', icon: Printer, roles: ["admin", "vendedor", "cajero", "despacho"] },
-    { to: "clientes", label: 'Clientes', icon: UserCheck, roles: ["admin", "vendedor", "gerente"] },
-    { to: "inventario", label: 'Inventario', icon: Package, roles: ["admin", "vendedor", "gerente"] },
-    { to: "proveedores", label: 'Proveedores', icon: Users, roles: ["admin", "vendedor"] },
-    { to: "cajabancos", label: 'Cajas/Bancos', icon: Wallet, roles: ["admin", "vendedor", "cajero"] },
-    { to: "aperturaCierre", label: 'Apertura/Cierre Caja', icon: DoorOpen, roles: ["admin", "vendedor", "cajero"] },
-    { to: "devoluciones", label: 'Devoluciones', icon: RotateCcw, roles: ["admin", "vendedor", "cajero"] },
-    { to: "activosFijos", label: 'Activos Fijos', icon: Wrench, roles: ["admin", "vendedor"] },
-    { to: "gastosFijos", label: 'Gastos Fijos', icon: Lightbulb, roles: ["admin", "vendedor"] },
-    { to: "personal", label: 'Personal', icon: HardHat, roles: ["admin", "vendedor"] },
-    { to: "sucursales", label: 'Sucursales', icon: Building2, roles: ["admin", "vendedor"] },
-    { to: "terminalesPOS", label: 'Terminales POS', icon: Monitor, roles: ["admin", "vendedor"] },
-    { to: "transferencias", label: 'Transferencias', icon: ArrowLeftRight, roles: ["admin", "vendedor"] },
-    { to: "usuarios", label: 'Usuarios', icon: Users, roles: ["admin", "vendedor"] },
-    { to: "estadosFinancieros", label: 'Estados Financieros', icon: FileSpreadsheetIcon, roles: ["admin", "vendedor", "gerente"] },
-    { to: "analisis", label: 'Análisis', icon: ChartColumn, roles: ["admin", "vendedor", "gerente"] },
-    { to: "proyecciones", key: 'proyecciones', label: 'Proyecciones', icon: TrendingUp, roles: ["admin", "vendedor", "gerente"] },
-    { to: "auditoria", label: 'Auditoría', icon: ScrollText, roles: ["admin", "vendedor", "gerente"] },
+    // ── MÓDULO VENTAS (nivel 2-4) ──────────────────────────────────────────────
+    { to: "ventas",         label: 'Ventas',               icon: ShoppingCart,       roles: ["admin", "vendedor", "gerente", "cajero"] },
+    { to: "pedidosWeb",     label: 'Pedidos Web',           icon: ShoppingBag,        roles: ["admin", "vendedor", "despacho"] },
+    { to: "impresiones",    label: 'Impresiones',           icon: Printer,            roles: ["admin", "vendedor", "cajero", "despacho"] },
+    { to: "clientes",       label: 'Clientes',              icon: UserCheck,          roles: ["admin", "vendedor"] },
+    { to: "devoluciones",   label: 'Devoluciones',          icon: RotateCcw,          roles: ["admin", "vendedor", "cajero"] },
+    { to: "aperturaCierre", label: 'Apertura/Cierre Caja',  icon: DoorOpen,           roles: ["cajero"] },
+
+    // ── MÓDULO ADMINISTRATIVO (nivel 2) ────────────────────────────────────────
+    { to: "inventario",     label: 'Inventario',            icon: Package,            roles: ["admin", "vendedor"] },
+    { to: "proveedores",    label: 'Proveedores',           icon: Users,              roles: ["admin", "vendedor"] },
+    { to: "transferencias", label: 'Transferencias',        icon: ArrowLeftRight,     roles: ["admin", "vendedor"] },
+    { to: "sucursales",     label: 'Sucursales',            icon: Building2,          roles: ["admin", "vendedor"] },
+
+    // ── MÓDULO CONTABLE/FINANCIERO (nivel 2-3) ─────────────────────────────────
+    { to: "cajabancos",          label: 'Cajas/Bancos',         icon: Wallet,             roles: ["admin", "vendedor"] },
+    { to: "activosFijos",        label: 'Activos Fijos',         icon: Wrench,             roles: ["admin", "vendedor"] },
+    { to: "gastosFijos",         label: 'Gastos Fijos',          icon: Lightbulb,          roles: ["admin", "vendedor"] },
+    { to: "personal",            label: 'Personal / Nómina',     icon: HardHat,            roles: ["admin", "vendedor", "gerente"] },
+    { to: "estadosFinancieros",  label: 'Estados Financieros',   icon: FileSpreadsheetIcon, roles: ["admin", "vendedor", "gerente"] },
+    { to: "analisis",            label: 'Análisis',              icon: ChartColumn,        roles: ["admin", "vendedor", "gerente"] },
+    { to: "proyecciones",        label: 'Proyecciones',          icon: TrendingUp,         roles: ["admin", "vendedor", "gerente"] },
+
+    // ── MÓDULO SISTEMA (solo superadmin) ───────────────────────────────────────
+    { to: "terminalesPOS",  label: 'Terminales POS',        icon: Monitor,            roles: [] },  // solo superadmin
+    { to: "usuarios",       label: 'Usuarios y Permisos',   icon: Users,              roles: [] },  // solo superadmin
+    { to: "auditoria",      label: 'Auditoría',             icon: ScrollText,         roles: [] },  // solo superadmin
 ];
 
 // Componente de enlace reutilizable

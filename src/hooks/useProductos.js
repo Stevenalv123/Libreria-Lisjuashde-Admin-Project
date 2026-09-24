@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toast } from "react-hot-toast";
 import { supabase } from "../supabase/supabaseclient";
 import { useEmpresa } from "../contexts/empresacontext";
 
@@ -251,6 +252,64 @@ export function useProductos() {
     };
 
     const eliminarProducto = async (idProducto) => {
+        try {
+            const { error } = await supabase
+                .from("productos")
+                .delete()
+                .eq("id_producto", idProducto);
+
+            if (error) throw error;
+
+            setProductos((prev) =>
+                prev.filter((p) => p.id_producto !== idProducto)
+            );
+
+            return { success: true };
+        } catch (err) {
+            console.error("Error al eliminar producto:", err);
+            return { success: false, message: err.message };
+        }
+    };
+
+    const actualizarProducto = async (idProducto, cambios) => {
+        try {
+            const { data, error } = await supabase
+                .from("productos")
+                .update(cambios)
+                .eq("id_producto", idProducto)
+                .select(`
+                    id_producto,
+                    codigo_sku,
+                    nombre,
+                    descripcion,
+                    precio_compra,
+                    precio_venta,
+                    stock,
+                    stock_minimo,
+                    unidades_medidas(nombre),
+                    estado,
+                    fecha_registro,
+                    categorias_producto(nombre),
+                    proveedores(nombre_comercial),
+                    fecha_vencimiento
+                `)
+                .single();
+
+            if (error) throw error;
+
+            if (data) {
+                setProductos((prev) =>
+                    prev.map((p) =>
+                        p.id_producto === idProducto ? data : p
+                    )
+                );
+            }
+
+            return { success: true, data };
+        } catch (err) {
+            console.error("Error al actualizar producto:", err);
+            return { success: false, message: err.message };
+        }
     };
 
     return {
@@ -260,6 +319,7 @@ export function useProductos() {
         setProductos,
         agregarProducto,
         generarAsientoInicial,
-        eliminarProducto
+        eliminarProducto,
+        actualizarProducto
     };
 }

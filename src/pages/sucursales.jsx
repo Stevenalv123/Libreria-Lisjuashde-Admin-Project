@@ -10,8 +10,11 @@ import Swal from "sweetalert2";
 const EMPRESA_ID = 1;
 
 export default function Sucursales() {
-  const { perfil } = useAuth();
+  const { perfil, rol } = useAuth();
+  // El admin solo administra su sucursal asignada; el superadmin ve todo.
+  const esAdmin = rol === "admin";
   const [sucursales, setSucursales] = useState([]);
+  const [conteoEmpleados, setConteoEmpleados] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editando, setEditando] = useState(null);
@@ -19,15 +22,37 @@ export default function Sucursales() {
 
   const cargar = useCallback(async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from("sucursales")
       .select("*")
-      .eq("id_empresa", EMPRESA_ID)
-      .order("id", { ascending: true });
+      .eq("id_empresa", EMPRESA_ID);
+
+    // Restricción por rol: admin solo ve su sucursal.
+    if (esAdmin && perfil?.id_sucursal) {
+      query = query.eq("id", perfil.id_sucursal);
+    }
+
+    const { data, error } = await query.order("id", { ascending: true });
     if (error) console.error("Error cargando sucursales:", error.message);
     setSucursales(data || []);
+
+    // Conteo de empleados por sucursal.
+    const { data: empData, error: empError } = await supabase
+      .from("empleados")
+      .select("id_sucursal")
+      .eq("id_empresa", EMPRESA_ID);
+    if (!empError && empData) {
+      const mapa = {};
+      empData.forEach((e) => {
+        if (e.id_sucursal != null) {
+          mapa[e.id_sucursal] = (mapa[e.id_sucursal] || 0) + 1;
+        }
+      });
+      setConteoEmpleados(mapa);
+    }
+
     setIsLoading(false);
-  }, []);
+  }, [esAdmin, perfil?.id_sucursal]);
 
   useEffect(() => {
     cargar();
@@ -106,14 +131,23 @@ export default function Sucursales() {
         <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
           <div className="flex flex-col gap-1">
             <h3 className="text-title text-xl font-bold">Gestión de Sucursales</h3>
-            <p className="text-subtitle text-s">Administra las sucursales de la empresa</p>
+            <p className="text-subtitle text-s">
+              {esAdmin ? "Administra la información de tu sucursal asignada" : "Administra las sucursales de la empresa"}
+            </p>
+            {esAdmin && (
+              <span className="inline-flex items-center gap-1 w-fit mt-1 bg-button/20 text-title text-xs font-medium px-2.5 py-1 rounded-full">
+                <Building2 size={12} /> Tu sucursal
+              </span>
+            )}
           </div>
-          <button
-            className="bg-button text-button flex flex-row h-10 gap-3 p-2 rounded-xl items-center cursor-pointer hover:scale-110 transition"
-            onClick={abrirNueva}
-          >
-            <Plus /> Nueva Sucursal
-          </button>
+          {!esAdmin && (
+            <button
+              className="bg-button text-button flex flex-row h-10 gap-3 p-2 rounded-xl items-center cursor-pointer hover:scale-110 transition"
+              onClick={abrirNueva}
+            >
+              <Plus /> Nueva Sucursal
+            </button>
+          )}
         </div>
 
         <div className="mt-8 overflow-x-auto">
@@ -129,6 +163,7 @@ export default function Sucursales() {
                   <th className="py-3 px-2 text-left">Nombre</th>
                   <th className="py-3 px-2 text-left">Dirección</th>
                   <th className="py-3 px-2 text-left">Teléfono</th>
+                  <th className="py-3 px-2 text-center">Empleados</th>
                   <th className="py-3 px-2 text-center">Estado</th>
                   <th className="py-3 px-2 text-center">Acciones</th>
                 </tr>
@@ -140,6 +175,7 @@ export default function Sucursales() {
                     <td className="py-3 px-2 font-medium">{s.nombre}</td>
                     <td className="py-3 px-2 text-subtitle">{s.direccion || "—"}</td>
                     <td className="py-3 px-2 text-subtitle">{s.telefono || "—"}</td>
+                    <td className="py-3 px-2 text-center text-subtitle">{conteoEmpleados[s.id] || 0}</td>
                     <td className="py-3 px-2 text-center">
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${s.estado ? "bg-green-600/20 text-green-400" : "bg-red-600/20 text-red-400"}`}>
                         {s.estado ? "Activa" : "Inactiva"}
@@ -150,9 +186,11 @@ export default function Sucursales() {
                         <button onClick={() => abrirEditar(s)} className="text-blue-400 hover:text-blue-300" title="Editar">
                           <Pencil size={18} />
                         </button>
-                        <button onClick={() => toggleEstado(s)} className={s.estado ? "text-red-400 hover:text-red-300" : "text-green-400 hover:text-green-300"} title={s.estado ? "Desactivar" : "Activar"}>
-                          <Power size={18} />
-                        </button>
+                        {!esAdmin && (
+                          <button onClick={() => toggleEstado(s)} className={s.estado ? "text-red-400 hover:text-red-300" : "text-green-400 hover:text-green-300"} title={s.estado ? "Desactivar" : "Activar"}>
+                            <Power size={18} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

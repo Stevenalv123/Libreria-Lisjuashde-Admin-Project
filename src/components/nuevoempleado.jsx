@@ -1,9 +1,10 @@
-import { Plus, Save } from 'lucide-react';
+import { Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from "react-hot-toast"
 import { useEmpleados } from "../hooks/useEmpleados";
+import { supabase } from "../supabase/supabaseclient";
 
-export default function NuevoEmpleado({ onClose }) {
+export default function NuevoEmpleado({ onClose, idSucursalFija = null }) {
     const { addEmpleado } = useEmpleados();
 
     const [nombreCompleto, setNombreCompleto] = useState('');
@@ -16,8 +17,24 @@ export default function NuevoEmpleado({ onClose }) {
     const [fechaIngreso, setFechaIngreso] = useState('');
     const [cuentaBancaria, setCuentaBancaria] = useState('');
     const [estado, setEstado] = useState('Activo');
-    const [departamentos, setDepartamentos] = useState('');
-    
+    const [sucursales, setSucursales] = useState([]);
+    const [sucursalId, setSucursalId] = useState(idSucursalFija ? String(idSucursalFija) : '');
+
+    // Cargamos las sucursales disponibles (para que el superadmin pueda elegir).
+    useEffect(() => {
+        const cargarSucursales = async () => {
+            const { data, error } = await supabase
+                .from('sucursales')
+                .select('id, nombre')
+                .order('nombre', { ascending: true });
+            if (!error) setSucursales(data || []);
+        };
+        cargarSucursales();
+    }, []);
+
+    useEffect(() => {
+        if (idSucursalFija) setSucursalId(String(idSucursalFija));
+    }, [idSucursalFija]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -30,9 +47,10 @@ export default function NuevoEmpleado({ onClose }) {
             puesto: puesto,
             departamento: departamento,
             salario_mensual: Number(salarioMensual) || 0,
-            fecha_ingreso: fechaIngreso,
+            fecha_ingreso: fechaIngreso || null,
             cuenta_bancaria: cuentaBancaria,
-            estado: estado
+            estado: estado,
+            id_sucursal: sucursalId ? Number(sucursalId) : null
         };
 
         const result = await addEmpleado(nuevoEmpleado);
@@ -104,6 +122,24 @@ export default function NuevoEmpleado({ onClose }) {
                                 <option value="Activo">Activo</option>
                                 <option value="Inactivo">Inactivo</option>
                             </select>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <label className="text-sm font-medium text-title">Sucursal</label>
+                            <select
+                                value={sucursalId}
+                                onChange={e => setSucursalId(e.target.value)}
+                                disabled={!!idSucursalFija}
+                                className="bg-input border border-secondary rounded-lg p-3 disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                <option value="">Sin asignar</option>
+                                {sucursales.map(s => (
+                                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                                ))}
+                            </select>
+                            {idSucursalFija && (
+                                <span className="text-xs text-subtitle">Se asigna automáticamente a tu sucursal.</span>
+                            )}
                         </div>
                     </div>
 

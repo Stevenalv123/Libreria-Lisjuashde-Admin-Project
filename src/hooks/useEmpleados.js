@@ -5,7 +5,7 @@ import { useEmpresa } from "../contexts/empresacontext";
 
 const TABLA = 'empleados';
 
-export function useEmpleados() {
+export function useEmpleados(idSucursal = null) {
     const { empresaId } = useEmpresa(); 
 
     const [empleados, setEmpleados] = useState([]);
@@ -19,10 +19,17 @@ export function useEmpleados() {
         setIsLoading(true);
         setError(null);
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from(TABLA)
                 .select('*') 
-                .eq('id_empresa', empresaId)
+                .eq('id_empresa', empresaId);
+
+            // Filtro por sucursal (para admin/gerente que solo ven su sucursal)
+            if (idSucursal) {
+                query = query.eq('id_sucursal', idSucursal);
+            }
+
+            const { data, error } = await query
                 .order('nombre_completo', { ascending: true });
 
             if (error) {
@@ -37,7 +44,7 @@ export function useEmpleados() {
         } finally {
             setIsLoading(false);
         }
-    }, [empresaId]); 
+    }, [empresaId, idSucursal]); 
 
     useEffect(() => {
         fetchEmpleados();
