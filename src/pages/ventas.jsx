@@ -1,15 +1,60 @@
 import StatsCards from "../components/statscards";
 import NuevaVenta from "../components/nuevaVenta";
-import { useState } from "react";
-import { FileSpreadsheet, DollarSign, AlertTriangle, CheckCircle, Clock, Plus, Pencil, Trash } from "lucide-react";
+import { useState, useEffect } from "react";
+import { FileSpreadsheet, DollarSign, AlertTriangle, CheckCircle, Clock, Plus, Pencil, Trash, DoorOpen } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useClientes } from "../hooks/useClientes";
 import { useVenta } from "../hooks/useVenta";
+import { useAuth } from "../contexts/authcontext";
+import { supabase } from "../supabase/supabaseclient";
+
+const EMPRESA_ID = 1;
 
 export default function Ventas() {
     const [isModalOpen, setIsModalOpen] = useState(false);
 
     const { ventas, isLoading: isLoadingVentas, fetchVentas } = useVenta();
     const { clientes, isLoading: isLoadingClientes } = useClientes();
+    const { user, rol } = useAuth();
+    const navigate = useNavigate();
+
+    // --- Validación de caja abierta (RF-12) ---
+    // Sólo el rol "cajero" está obligado a tener la caja abierta para registrar ventas.
+    // Los demás roles (superadmin, admin, gerente, despacho) pueden vender siempre.
+    const esCajero = rol === "cajero";
+    // null = aún verificando; true/false = resultado
+    const [cajaAbierta, setCajaAbierta] = useState(esCajero ? null : true);
+
+    useEffect(() => {
+        let activo = true;
+        const verificarCaja = async () => {
+            // Si no es cajero, no se aplica la restricción.
+            if (!esCajero) {
+                setCajaAbierta(true);
+                return;
+            }
+            if (!user?.id) return;
+            const { data, error } = await supabase
+                .from("apertura_caja")
+                .select("id")
+                .eq("id_cajero", user.id)
+                .eq("estado", "abierta")
+                .eq("id_empresa", EMPRESA_ID)
+                .limit(1);
+            if (!activo) return;
+            if (error) {
+                console.error("Error verificando caja abierta:", error.message);
+                setCajaAbierta(false);
+                return;
+            }
+            setCajaAbierta(Array.isArray(data) && data.length > 0);
+        };
+        verificarCaja();
+        return () => { activo = false; };
+    }, [esCajero, user]);
+
+    // El botón de venta se bloquea sólo cuando es cajero y ya se verificó que NO tiene caja abierta.
+    const ventaBloqueada = esCajero && cajaAbierta === false;
 
     const totalVentas = ventas
         ? ventas.reduce((acc, v) => acc + Number(v.monto_total), 0)
@@ -48,6 +93,24 @@ export default function Ventas() {
 
     return (
         <div>
+            {ventaBloqueada && (
+                <div className="mt-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-yellow-900/30 border border-yellow-600/50 text-yellow-300 rounded-2xl p-4">
+                    <div className="flex items-start gap-3">
+                        <AlertTriangle className="shrink-0 mt-0.5" size={22} />
+                        <div>
+                            <p className="font-semibold">No tienes una caja abierta.</p>
+                            <p className="text-sm text-yellow-300/80">Debes abrir la caja antes de registrar ventas.</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => navigate("/dashboard/aperturaCierre")}
+                        className="shrink-0 bg-yellow-600 text-white flex flex-row h-10 gap-2 px-4 rounded-xl items-center justify-center cursor-pointer hover:scale-105 transition"
+                    >
+                        <DoorOpen size={18} /> Ir a Apertura de Caja
+                    </button>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
                 <StatsCards title={"Total Ventas"} icon={<DollarSign className="text-title" />} value={formatCurrency(totalVentas)} />
                 <StatsCards title={"Facturas Emitidas"} icon={<FileSpreadsheet className="text-title" />} value={facturasEmitidas} />
@@ -63,8 +126,14 @@ export default function Ventas() {
                             <p className="text-subtitle text-s">Registra y administra tus ventas</p>
                         </div>
                         <button
-                            className="btn-new bg-button text-button flex flex-row h-10 gap-3 p-2 rounded-xl items-center cursor-pointer hover:opacity-95 hover:scale-110 transition"
+                            className={`btn-new bg-button text-button flex flex-row h-10 gap-3 p-2 rounded-xl items-center transition ${
+                                ventaBloqueada
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : "cursor-pointer hover:opacity-95 hover:scale-110"
+                            }`}
                             onClick={() => setIsModalOpen(true)}
+                            disabled={ventaBloqueada}
+                            title={ventaBloqueada ? "Debes abrir la caja antes de registrar ventas" : undefined}
                         >
                             <span className="icon"><Plus /></span> Nueva Venta
                         </button>
