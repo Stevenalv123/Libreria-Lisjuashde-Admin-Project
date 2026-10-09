@@ -3,10 +3,11 @@ import Tabs from "../components/tabs";
 import NuevoProducto from "../components/nuevoProducto";
 import EditarProducto from "../components/editarProducto";
 import { useState } from "react";
-import { Box, TrendingUp, TrendingDown, CircleAlert, ArrowLeftRight, Plus, ShoppingBasket, Pencil, Trash } from "lucide-react";
+import { Box, TrendingUp, TrendingDown, CircleAlert, ArrowLeftRight, Plus, ShoppingBasket, Pencil, Trash, Printer, Barcode } from "lucide-react";
 import { useProductos } from "../hooks/useProductos";
 import Swal from "sweetalert2";
 import { toast } from "react-hot-toast";
+import { generarCodigoEAN13, imprimirCodigosBarras } from "../utils/generarCodigoBarras";
 
 export default function Inventario() {
     const tabs = [
@@ -23,6 +24,17 @@ export default function Inventario() {
         if (!producto) return total;
         return total + (producto.stock * producto.precio_compra);
     }, 0);
+
+    const codigoDe = (p) => p.codigo_barras || generarCodigoEAN13(p.id_producto);
+
+    const imprimirUno = (p) => {
+        imprimirCodigosBarras([{ codigo: codigoDe(p), nombre: p.nombre, precio: p.precio_venta }]);
+    };
+
+    const imprimirTodos = () => {
+        if (!productos.length) return toast.error("No hay productos para imprimir");
+        imprimirCodigosBarras(productos.map(p => ({ codigo: codigoDe(p), nombre: p.nombre, precio: p.precio_venta })));
+    };
 
     const handleEliminarProducto = async (id, nombre) => {
         Swal.fire({
@@ -78,6 +90,13 @@ export default function Inventario() {
                                     >
                                         Generar Asiento Inicial
                                     </button>
+                                    <button
+                                        onClick={imprimirTodos}
+                                        className="bg-secondary/40 text-title border border-secondary px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2 hover:opacity-95 hover:scale-110 transition"
+                                        title="Imprimir códigos de barra de todos los productos"
+                                    >
+                                        <Barcode size={18} /> Imprimir Códigos
+                                    </button>
                                     <button className="btn-new bg-button text-button flex flex-row h-10 text-s gap-3 p-2 rounded-xl items-center cursor-pointer hover:opacity-95 hover:scale-110 transition" onClick={() => setIsModalOpen(true)}>
                                         <span className="icon"><Plus /></span> Nuevo Producto
                                     </button>
@@ -97,6 +116,7 @@ export default function Inventario() {
                                                 <thead className="bg-secondary/10">
                                                     <tr className="border-b border-secondary/50 text-sm font-semibold text-subtitle">
                                                         <th className="py-3 px-4 text-center">Código</th>
+                                                        <th className="py-3 px-4 text-center">Código de Barras</th>
                                                         <th className="py-3 px-4 text-center">Nombre</th>
                                                         <th className="py-3 px-4 text-center">Categoría</th>
                                                         <th className="py-3 px-4 text-center">Precio Compra</th>
@@ -113,6 +133,14 @@ export default function Inventario() {
                                                     {productos.map((p) => (
                                                         <tr key={p.id_producto} className="border-t border-secondary text-sm hover:bg-secondary/10 transition-colors">
                                                             <td className="py-4 px-4 font-mono text-center text-gray-400">{p.codigo_sku || "-"}</td>
+                                                            <td className="py-4 px-4 text-center">
+                                                                <div className="flex items-center justify-center gap-2">
+                                                                    <span className="font-mono text-xs text-subtitle">{codigoDe(p)}</span>
+                                                                    <button title="Imprimir código de barras" onClick={() => imprimirUno(p)} className="text-title hover:text-blue-300 transition-colors transform hover:scale-110 cursor-pointer">
+                                                                        <Printer size={16} />
+                                                                    </button>
+                                                                </div>
+                                                            </td>
                                                             <td className="py-4 px-4 font-medium text-center text-title">
                                                                 <div className="flex flex-col items-center gap-1">
                                                                     <span>{p.nombre}</span>

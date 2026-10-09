@@ -1,10 +1,11 @@
-import { Save } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Save, Printer } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useCategorias } from '../hooks/useCategorias';
 import { useUnidadesMedidas } from '../hooks/useUnidadesMedidas';
 import { useProveedores } from '../hooks/useProveedores';
 import { toast } from "react-hot-toast";
 import { supabase } from '../supabase/supabaseclient';
+import { generarCodigoEAN13, dibujarCodigoBarras, imprimirCodigosBarras } from '../utils/generarCodigoBarras';
 
 export default function EditarProducto({ producto, onClose, onGuardar }) {
     const { categorias } = useCategorias();
@@ -27,6 +28,8 @@ export default function EditarProducto({ producto, onClose, onGuardar }) {
     const [categoriaId, setCategoriaId] = useState('');
     const [unidadMedidaId, setUnidadMedidaId] = useState('');
     const [proveedorId, setProveedorId] = useState('');
+    const [codigoBarras, setCodigoBarras] = useState('');
+    const barcodeRef = useRef(null);
 
     // Cargamos la fila completa para obtener los IDs de las relaciones.
     useEffect(() => {
@@ -56,6 +59,7 @@ export default function EditarProducto({ producto, onClose, onGuardar }) {
                     setCategoriaId(data.id_categoria ?? '');
                     setUnidadMedidaId(data.id_unidad_medida ?? '');
                     setProveedorId(data.id_proveedor ?? '');
+                    setCodigoBarras(data.codigo_barras || generarCodigoEAN13(producto.id_producto));
                 }
             } catch (err) {
                 console.error('Error al cargar producto:', err.message);
@@ -67,8 +71,19 @@ export default function EditarProducto({ producto, onClose, onGuardar }) {
         cargar();
     }, [producto]);
 
+    // Dibuja el código de barras cuando ya cargaron los datos.
+    useEffect(() => {
+        if (!cargando && codigoBarras && barcodeRef.current) {
+            dibujarCodigoBarras(barcodeRef.current, codigoBarras, { height: 50, fontSize: 13 });
+        }
+    }, [cargando, codigoBarras]);
+
     const handleChange = (campo, valor) => {
         setForm((prev) => ({ ...prev, [campo]: valor }));
+    };
+
+    const handleImprimirBarras = () => {
+        imprimirCodigosBarras([{ codigo: codigoBarras, nombre: form.nombre, precio: form.precio_venta }]);
     };
 
     const handleSubmit = async (e) => {
@@ -87,6 +102,7 @@ export default function EditarProducto({ producto, onClose, onGuardar }) {
             id_proveedor: parseInt(proveedorId) || null,
             fecha_vencimiento: form.fecha_vencimiento || null,
             estado: form.estado,
+            codigo_barras: codigoBarras || null,
         };
 
         const result = await onGuardar(producto.id_producto, cambios);
@@ -231,6 +247,22 @@ export default function EditarProducto({ producto, onClose, onGuardar }) {
                                 <span className="text-title text-sm">{form.estado ? 'Activo' : 'Inactivo'}</span>
                             </label>
                         </div>
+                    </div>
+
+                    <div className="mt-8 border border-secondary rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        <div className="flex flex-col items-center sm:items-start gap-2">
+                            <span className="text-sm font-medium text-title">Código de Barras (EAN-13)</span>
+                            <div className="bg-white rounded-md p-2">
+                                <svg ref={barcodeRef}></svg>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleImprimirBarras}
+                            className="bg-secondary/40 text-title border border-secondary px-4 py-2 rounded-lg cursor-pointer flex items-center gap-2 hover:opacity-95 hover:scale-105 transition"
+                        >
+                            <Printer size={18} /> Imprimir código
+                        </button>
                     </div>
 
                     <div className="flex justify-end gap-4 mt-8">

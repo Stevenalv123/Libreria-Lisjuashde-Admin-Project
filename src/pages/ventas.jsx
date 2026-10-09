@@ -1,12 +1,14 @@
 import StatsCards from "../components/statscards";
 import NuevaVenta from "../components/nuevaVenta";
 import { useState, useEffect } from "react";
-import { FileSpreadsheet, DollarSign, AlertTriangle, CheckCircle, Clock, Plus, Pencil, Trash, DoorOpen } from "lucide-react";
+import { FileSpreadsheet, DollarSign, AlertTriangle, CheckCircle, Clock, Plus, Pencil, Trash, DoorOpen, FileText } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useClientes } from "../hooks/useClientes";
 import { useVenta } from "../hooks/useVenta";
 import { useAuth } from "../contexts/authcontext";
 import { supabase } from "../supabase/supabaseclient";
+import { generarFacturaPDF } from "../utils/generarFacturaPDF";
+import { toast } from "react-hot-toast";
 
 const EMPRESA_ID = 1;
 
@@ -88,6 +90,53 @@ export default function Ventas() {
 
     const handleCloseModal = () => {
         setIsModalOpen(false);
+    };
+
+    const handleVerFactura = async (venta) => {
+        try {
+            // 1. Intentar recuperar la factura ya guardada
+            const { data: factura } = await supabase
+                .from("facturas")
+                .select("contenido_json")
+                .eq("numero_factura", venta.numero_factura)
+                .maybeSingle();
+
+            if (factura?.contenido_json) {
+                generarFacturaPDF(factura.contenido_json, "open");
+                return;
+            }
+
+            // 2. Reconstruir desde el detalle de la venta
+            const { data: detalles, error } = await supabase
+                .from("detalle_ventas")
+                .select("cantidad, precio_unitario, descuento, id_producto, productos(nombre)")
+                .eq("id_venta", venta.id_venta);
+
+            if (error) throw error;
+
+            const clienteObj = clientes?.find(c => c.id_cliente === venta.id_cliente);
+            const datosFactura = {
+                numeroFactura: venta.numero_factura,
+                fecha: venta.fecha_venta
+                    ? new Date(venta.fecha_venta).toLocaleDateString("es-NI", { timeZone: "UTC" })
+                    : new Date().toLocaleDateString("es-NI"),
+                cliente: clienteObj?.nombre || getClientName(venta.id_cliente),
+                identificacion: clienteObj?.identificacion || "",
+                tipoPago: venta.tipo_pago || "",
+                items: (detalles || []).map(d => ({
+                    nombre: d.productos?.nombre || `Producto #${d.id_producto}`,
+                    cantidad: d.cantidad,
+                    precio: d.precio_unitario,
+                    descuento: d.descuento || 0,
+                })),
+                plazoDias: venta.plazo_dias || 0,
+            };
+
+            generarFacturaPDF(datosFactura, "open");
+        } catch (err) {
+            console.error("Error al generar la factura:", err.message);
+            toast.error("No se pudo generar la factura.");
+        }
     };
 
 
@@ -178,6 +227,9 @@ export default function Ventas() {
                                         <td className="p-4 text-center text-title">{formatCurrency(venta.monto_total)}</td>
                                         <td className="p-4 text-center">{getStatusBadge(venta.estado)}</td>
                                         <td className="p-4 flex gap-5 text-center justify-center">
+                                            <button onClick={() => handleVerFactura(venta)} className="text-green-400 cursor-pointer hover:text-green-300 transition-colors" aria-label="Ver Factura" title="Ver Factura">
+                                                <FileText size={16} />
+                                            </button>
                                             <button className="text-blue-400 cursor-pointer hover:text-blue-300 transition-colors" aria-label="Editar">
                                                 <Pencil size={16} />
                                             </button>

@@ -1,9 +1,12 @@
-import { Plus, Save, Trash } from 'lucide-react';
+import { Plus, Save, Trash, ScanLine } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useProductos } from '../hooks/useProductos';
 import { toast } from "react-hot-toast";
 import { useVenta } from '../hooks/useVenta';
 import { useClientes } from '../hooks/useClientes';
+import { generarFacturaPDF } from '../utils/generarFacturaPDF';
+import { supabase } from '../supabase/supabaseclient';
+import { useEmpresa } from '../contexts/empresacontext';
 
 const getFormattedDate = () => {
     const today = new Date();
@@ -35,7 +38,9 @@ export default function NuevaVenta({ onClose }) {
     const [cantidadInput, setCantidadInput] = useState(1);
     const [descuentoInput, setDescuentoInput] = useState(0);
     const { crearVenta, ventas } = useVenta();
+    const { empresaId } = useEmpresa();
     const [numeroFactura, setNumeroFactura] = useState('Generando...');
+    const [codigoBarras, setCodigoBarras] = useState('');
 
     useEffect(() => {
         if (ventas && Array.isArray(ventas)) {
@@ -94,10 +99,69 @@ export default function NuevaVenta({ onClose }) {
 
         if (idVenta) {
             toast.success(`✅ Venta creada correctamente (ID: ${idVenta})`);
+
+            // --- Generar factura PDF + guardar registro ---
+            try {
+                const clienteObj = clientes.find(c => String(c.id_cliente) === String(cliente));
+                const datosFactura = {
+                    numeroFactura,
+                    fecha: fecha || new Date().toLocaleDateString('es-NI'),
+                    cliente: clienteObj?.nombre || 'Cliente General',
+                    identificacion: clienteObj?.identificacion || '',
+                    tipoPago,
+                    items: productosSeleccionados.map(p => ({
+                        nombre: p.nombre,
+                        cantidad: p.cantidad,
+                        precio: p.precio,
+                        descuento: p.descuento,
+                    })),
+                    plazoDias: tipoPago === 'credito' ? calcularDias(fecha, vencimiento) : 0,
+                    vencimiento: tipoPago === 'credito' ? vencimiento : '',
+                };
+
+                generarFacturaPDF(datosFactura, 'open');
+
+                await supabase.from('facturas').insert({
+                    numero_factura: numeroFactura,
+                    id_venta: idVenta,
+                    id_empresa: empresaId,
+                    contenido_json: datosFactura,
+                });
+            } catch (err) {
+                console.error('Error generando factura:', err.message);
+                toast.error('La venta se registró, pero no se pudo generar la factura.');
+            }
+
             onClose();
         } else {
             toast.error("⚠️ Error al crear la venta");
         }
+    };
+
+    const handleEscanear = (codigo) => {
+        const valor = (codigo ?? '').trim();
+        if (!valor) return;
+        const prod = productos.find(p => String(p.codigo_barras || '') === valor);
+        if (!prod) {
+            toast.error(`No se encontró producto con código ${valor}`);
+            return;
+        }
+        if (productosSeleccionados.some(p => p.id_producto === prod.id_producto)) {
+            setProductosSeleccionados(prev => prev.map(p =>
+                p.id_producto === prod.id_producto ? { ...p, cantidad: Number(p.cantidad) + 1 } : p
+            ));
+        } else {
+            const precio = prod.precio_venta ?? prod.precio ?? prod.precio_compra ?? 0;
+            setProductosSeleccionados(prev => [...prev, {
+                id_producto: prod.id_producto,
+                nombre: prod.nombre,
+                precio,
+                cantidad: 1,
+                descuento: 0,
+            }]);
+        }
+        toast.success(`➕ ${prod.nombre}`);
+        setCodigoBarras('');
     };
 
     const handleAddProduct = () => {
@@ -190,6 +254,27 @@ export default function NuevaVenta({ onClose }) {
                         <div className='md:col-span-3 flex flex-col border-1 p-4 rounded-lg border-secondary'>
                             <h3 className="text-lg font-semibold text-title">Productos</h3>
                             <p className='text-sm text-subtitle mb-4'>Agrega los productos que deseas vender</p>
+
+                            <div className="flex flex-col gap-2 mb-4">
+                                <label htmlFor="codigoBarras" className="text-sm font-medium text-title flex items-center gap-2">
+                                    <ScanLine size={16} /> Escanear código de barras
+                                </label>
+                                <input
+                                    id="codigoBarras"
+                                    type="text"
+                                    value={codigoBarras}
+                                    onChange={(e) => setCodigoBarras(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleEscanear(codigoBarras);
+                                        }
+                                    }}
+                                    placeholder="Escanee o escriba el código y presione Enter"
+                                    className="bg-input border border-secondary rounded-lg p-3"
+                                />
+                            </div>
+
                             <div className="grid grid-cols-8 gap-x-4 gap-y-4 items-end">
                                 <div className="flex flex-col gap-2 col-span-3">
                                     <label htmlFor="producto" className="text-sm font-medium text-title">Producto</label>

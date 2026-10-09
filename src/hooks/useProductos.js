@@ -21,6 +21,7 @@ export function useProductos() {
                     .from("productos")
                     .select(`id_producto,
                         codigo_sku,
+                        codigo_barras,
                         nombre,
                         descripcion,
                         precio_compra,
@@ -120,6 +121,7 @@ export function useProductos() {
                 .select(`
                     id_producto,
                     codigo_sku,
+                    codigo_barras,
                     nombre,
                     descripcion,
                     precio_compra,
@@ -280,6 +282,7 @@ export function useProductos() {
                 .select(`
                     id_producto,
                     codigo_sku,
+                    codigo_barras,
                     nombre,
                     descripcion,
                     precio_compra,

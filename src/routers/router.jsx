@@ -11,6 +11,9 @@ import Proveedores from '../pages/proveedores';
 import CajasBancos from '../pages/cajasbancos';
 import ActivosFijos from '../pages/activosfijos';
 import Personal from '../pages/personal';
+import RecursosHumanos from '../pages/recursosHumanos';
+import Marketing from '../pages/marketing';
+import Reportes from '../pages/reportes';
 import AnalisisFinanciero from '../pages/analisisfinanciero';
 import OnBuilding from '../components/onbuiliding';
 import GastosFijos from '../pages/GastosFijos';
@@ -57,9 +60,11 @@ const router = createBrowserRouter([
               { path: 'activosFijos', element: <ActivosFijos /> },
               { path: 'gastosFijos', element: <GastosFijos /> },
               { path: 'personal', element: <Personal /> },
+              { path: 'recursosHumanos', element: <RecursosHumanos /> },
+              { path: 'marketing', element: <Marketing /> },
               { path: 'estadosFinancieros', element: <EstadosFinancieros /> },
               { path: 'analisis', element: <AnalisisFinanciero /> },
-              { path: 'reportes', element: <OnBuilding /> },
+              { path: 'reportes', element: <Reportes /> },
               { path: 'proyecciones', element: <Proyecciones /> },
               { path: 'sucursales', element: <Sucursales /> },
               { path: 'terminalesPOS', element: <TerminalesPOS /> },

@@ -16,13 +16,17 @@ const fmt = (v) =>
     .replace("C$", "C$ ");
 
 export default function AperturaCierre() {
-  const { user, perfil } = useAuth();
+  const { user, perfil, rol } = useAuth();
   const [cajaActual, setCajaActual] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [terminales, setTerminales] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [ventasPeriodo, setVentasPeriodo] = useState(0);
   const [historial, setHistorial] = useState([]);
+  const [resumenCajas, setResumenCajas] = useState([]);
+
+  // Los supervisores ven un resumen de las cajas del día de su sucursal.
+  const esSupervisor = ["admin", "gerente", "superadmin"].includes(rol);
 
   // Modales
   const [modalAbrir, setModalAbrir] = useState(false);
@@ -79,8 +83,39 @@ export default function AperturaCierre() {
     setTerminales(term || []);
     setSucursales(suc || []);
     setHistorial(hist || []);
+
+    // Resumen de cajas del día para supervisores (admin/gerente/superadmin)
+    if (esSupervisor) {
+      const inicioDia = format(new Date(), "yyyy-MM-dd") + "T00:00:00";
+      let query = supabase
+        .from("apertura_caja")
+        .select("*, terminal:terminales_pos(nombre), sucursal:sucursales(nombre)")
+        .eq("id_empresa", EMPRESA_ID)
+        .gte("fecha_apertura", inicioDia)
+        .order("fecha_apertura", { ascending: false });
+
+      // admin/gerente limitados a su sucursal (si la tienen asignada); superadmin ve todas
+      if (rol !== "superadmin" && perfil?.id_sucursal) {
+        query = query.eq("id_sucursal", perfil.id_sucursal);
+      }
+
+      const [{ data: cajasDia }, { data: perfilesData }] = await Promise.all([
+        query,
+        supabase.from("perfiles").select("id, nombre_completo").eq("id_empresa", EMPRESA_ID),
+      ]);
+
+      const mapaNombres = {};
+      (perfilesData || []).forEach((p) => { mapaNombres[p.id] = p.nombre_completo; });
+      setResumenCajas((cajasDia || []).map((c) => ({
+        ...c,
+        cajero_nombre: mapaNombres[c.id_cajero] || "—",
+      })));
+    } else {
+      setResumenCajas([]);
+    }
+
     setIsLoading(false);
-  }, [user, calcularVentasPeriodo]);
+  }, [user, calcularVentasPeriodo, esSupervisor, rol, perfil]);
 
   useEffect(() => {
     cargar();
@@ -210,6 +245,63 @@ export default function AperturaCierre() {
           )}
         </div>
       </div>
+
+      {/* Resumen de cajas del día (supervisores) */}
+      {esSupervisor && (
+        <div className="mt-8 border border-secondary rounded-2xl p-5">
+          <div className="flex flex-col gap-1 mb-4">
+            <h3 className="text-title text-xl font-bold">Resumen de Cajas del Día</h3>
+            <p className="text-subtitle text-s">
+              {rol === "superadmin"
+                ? "Todas las cajas abiertas y cerradas hoy en la empresa"
+                : "Cajas de tu sucursal abiertas y cerradas hoy"}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <StatsCards title={"Cajas Abiertas"} icon={<DoorOpen className="text-green-400" />} value={resumenCajas.filter(c => c.estado === "abierta").length} />
+            <StatsCards title={"Cajas Cerradas"} icon={<DoorClosed className="text-red-400" />} value={resumenCajas.filter(c => c.estado === "cerrada").length} />
+            <StatsCards title={"Total Cierres (C$)"} icon={<Calculator className="text-blue-400" />} value={fmt(resumenCajas.reduce((s, c) => s + Number(c.monto_cierre || 0), 0))} />
+          </div>
+
+          <div className="overflow-x-auto">
+            {resumenCajas.length === 0 ? (
+              <p className="text-subtitle p-4 text-center">No hay cajas registradas hoy.</p>
+            ) : (
+              <table className="text-title w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-secondary/50 text-sm font-semibold text-subtitle">
+                    <th className="py-3 px-2 text-left">Cajero</th>
+                    <th className="py-3 px-2 text-left">Terminal / Sucursal</th>
+                    <th className="py-3 px-2 text-left">Apertura</th>
+                    <th className="py-3 px-2 text-left">Cierre</th>
+                    <th className="py-3 px-2 text-center">Inicial</th>
+                    <th className="py-3 px-2 text-center">Cierre (C$)</th>
+                    <th className="py-3 px-2 text-center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resumenCajas.map((c) => (
+                    <tr key={c.id} className="border-t border-secondary text-sm hover:bg-secondary transition-colors">
+                      <td className="py-3 px-2 font-medium">{c.cajero_nombre}</td>
+                      <td className="py-3 px-2 text-subtitle">{c.terminal?.nombre || "—"} · {c.sucursal?.nombre || "—"}</td>
+                      <td className="py-3 px-2">{format(new Date(c.fecha_apertura), "dd/MM/yyyy HH:mm")}</td>
+                      <td className="py-3 px-2">{c.fecha_cierre ? format(new Date(c.fecha_cierre), "dd/MM/yyyy HH:mm") : "—"}</td>
+                      <td className="py-3 px-2 text-center">{fmt(c.monto_inicial)}</td>
+                      <td className="py-3 px-2 text-center">{c.monto_cierre != null ? fmt(c.monto_cierre) : "—"}</td>
+                      <td className="py-3 px-2 text-center">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${c.estado === "abierta" ? "bg-green-600/20 text-green-400" : "bg-gray-600/20 text-gray-300"}`}>
+                          {c.estado === "abierta" ? "Abierta" : "Cerrada"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Modal Abrir Caja */}
       {modalAbrir && (
