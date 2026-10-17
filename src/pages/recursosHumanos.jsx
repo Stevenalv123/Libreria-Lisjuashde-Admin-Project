@@ -1,12 +1,17 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import {
     Users, DollarSign, Calendar, Building2, Plus, Calculator, Save,
-    Briefcase, TrendingUp, History
+    Briefcase, TrendingUp, History, FileText, Plane, HardHat, Scale, ClipboardCheck
 } from "lucide-react";
 import StatsCards from "../components/statscards";
 import Tabs from "../components/tabs";
 import NuevoEmpleado from "../components/nuevoempleado";
 import EmpleadosCards from "../components/empleadosCards";
+import RRHHCrud from "../components/rrhh/RRHHCrud";
+import MarcoLegalInfo from "../components/rrhh/MarcoLegalInfo";
+import {
+    CONTRATOS_CFG, VACACIONES_CFG, SEGURIDAD_CFG, MARCO_LEGAL_CFG, CUMPLIMIENTO_CFG
+} from "../components/rrhh/configsRRHH";
 import { useEmpleados } from "../hooks/useEmpleados";
 import { useEmpresa } from "../contexts/empresacontext";
 import { useAuth } from "../contexts/authcontext";
@@ -22,6 +27,11 @@ export default function RecursosHumanos() {
 
     const tabs = [
         { key: "empleados", label: "Empleados", icon: <Users size={16} /> },
+        { key: "contratos", label: "Contratos", icon: <FileText size={16} /> },
+        { key: "vacaciones", label: "Vacaciones y permisos", icon: <Plane size={16} /> },
+        { key: "seguridad", label: "Seguridad e higiene", icon: <HardHat size={16} /> },
+        { key: "marco_legal", label: "Marco legal", icon: <Scale size={16} /> },
+        { key: "cumplimiento", label: "Cumplimiento", icon: <ClipboardCheck size={16} /> },
         { key: "nomina", label: "Nómina", icon: <Calculator size={16} /> },
         { key: "historial", label: "Historial", icon: <History size={16} /> },
     ];
@@ -213,6 +223,38 @@ export default function RecursosHumanos() {
                                 </div>
                             )}
                         </>
+                    )}
+
+                    {/* ------- TAB CONTRATOS ------- */}
+                    {activeTab === "contratos" && (
+                        <RRHHCrud {...CONTRATOS_CFG} empresaId={empresaId} idSucursalFiltro={idSucursalFiltro} empleados={empleados} perfil={perfil} />
+                    )}
+
+                    {/* ------- TAB VACACIONES Y PERMISOS ------- */}
+                    {activeTab === "vacaciones" && (
+                        <RRHHCrud {...VACACIONES_CFG} empresaId={empresaId} idSucursalFiltro={idSucursalFiltro} empleados={empleados} perfil={perfil} />
+                    )}
+
+                    {/* ------- TAB SEGURIDAD E HIGIENE ------- */}
+                    {activeTab === "seguridad" && (
+                        <RRHHCrud {...SEGURIDAD_CFG} empresaId={empresaId} idSucursalFiltro={idSucursalFiltro} empleados={empleados} perfil={perfil} />
+                    )}
+
+                    {/* ------- TAB MARCO LEGAL ------- */}
+                    {activeTab === "marco_legal" && (
+                        <>
+                            <div className="flex flex-col gap-1 mb-5">
+                                <h3 className="text-title text-xl font-bold">Marco Legal</h3>
+                                <p className="text-subtitle text-s">Normativa laboral y fiscal aplicable en Nicaragua</p>
+                            </div>
+                            <MarcoLegalInfo />
+                            <RRHHCrud {...MARCO_LEGAL_CFG} empresaId={empresaId} empleados={empleados} perfil={perfil} />
+                        </>
+                    )}
+
+                    {/* ------- TAB CUMPLIMIENTO ------- */}
+                    {activeTab === "cumplimiento" && (
+                        <RRHHCrud {...CUMPLIMIENTO_CFG} empresaId={empresaId} idSucursalFiltro={idSucursalFiltro} empleados={empleados} perfil={perfil} />
                     )}
 
                     {/* ------- TAB NÓMINA ------- */}

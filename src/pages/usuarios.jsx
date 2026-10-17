@@ -32,11 +32,13 @@ export default function Usuarios() {
   const { perfil, signUpStaff } = useAuth();
   const [usuarios, setUsuarios] = useState([]);
   const [sucursales, setSucursales] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState({
+    id_empleado: "",
     nombre_completo: "",
     email: "",
     password: "",
@@ -46,14 +48,37 @@ export default function Usuarios() {
 
   const cargar = useCallback(async () => {
     setIsLoading(true);
-    const [{ data: perf }, { data: suc }] = await Promise.all([
+    const [{ data: perf }, { data: suc }, { data: emps }] = await Promise.all([
       supabase.from("perfiles").select("id, nombre_completo, email, rol, id_sucursal, activo, created_at").order("created_at", { ascending: false }),
       supabase.from("sucursales").select("id, nombre").eq("id_empresa", EMPRESA_ID),
+      supabase.from("empleados").select("id_empleado, nombre_completo, email, puesto, departamento, id_sucursal, estado").eq("id_empresa", EMPRESA_ID).order("nombre_completo"),
     ]);
     setUsuarios(perf || []);
     setSucursales(suc || []);
+    setEmpleados(emps || []);
     setIsLoading(false);
   }, []);
+
+  // Empleados que aún NO tienen usuario (perfil) creado, filtrando por email registrado.
+  const emailsConUsuario = new Set((usuarios || []).map((u) => (u.email || "").trim().toLowerCase()).filter(Boolean));
+  const empleadosDisponibles = (empleados || []).filter(
+    (e) => e.estado === "Activo" && e.email && e.email.trim() && !emailsConUsuario.has(e.email.trim().toLowerCase())
+  );
+
+  const seleccionarEmpleado = (idEmpleado) => {
+    const emp = empleados.find((e) => String(e.id_empleado) === String(idEmpleado));
+    if (!emp) {
+      setForm((f) => ({ ...f, id_empleado: "", nombre_completo: "", email: "", id_sucursal: "" }));
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      id_empleado: emp.id_empleado,
+      nombre_completo: emp.nombre_completo || "",
+      email: emp.email || "",
+      id_sucursal: emp.id_sucursal ? String(emp.id_sucursal) : f.id_sucursal,
+    }));
+  };
 
   useEffect(() => {
     cargar();
@@ -63,13 +88,13 @@ export default function Usuarios() {
 
   const abrirNuevo = () => {
     setEditando(null);
-    setForm({ nombre_completo: "", email: "", password: "", rol: "admin", id_sucursal: "" });
+    setForm({ id_empleado: "", nombre_completo: "", email: "", password: "", rol: "admin", id_sucursal: "" });
     setIsModalOpen(true);
   };
 
   const abrirEditar = (u) => {
     setEditando(u);
-    setForm({ nombre_completo: u.nombre_completo || "", email: u.email || "", password: "", rol: u.rol, id_sucursal: u.id_sucursal || "" });
+    setForm({ id_empleado: "", nombre_completo: u.nombre_completo || "", email: u.email || "", password: "", rol: u.rol, id_sucursal: u.id_sucursal || "" });
     setIsModalOpen(true);
   };
 
@@ -89,9 +114,12 @@ export default function Usuarios() {
       return;
     }
 
-    // Crear nuevo usuario
+    // Crear nuevo usuario — el nombre proviene del empleado seleccionado
+    if (!form.id_empleado) {
+      return toast.error("Seleccione un empleado registrado en Recursos Humanos.");
+    }
     if (!form.nombre_completo.trim() || !form.email.trim() || !form.password) {
-      return toast.error("Complete nombre, email y contraseña.");
+      return toast.error("El empleado seleccionado no tiene email, o falta la contraseña.");
     }
     if (form.password.length < 6) return toast.error("La contraseña debe tener al menos 6 caracteres.");
 
@@ -213,13 +241,31 @@ export default function Usuarios() {
               <button onClick={() => setIsModalOpen(false)} className="text-subtitle hover:text-title"><X /></button>
             </div>
             <form onSubmit={guardar} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Nombre Completo {!editando && "*"}</label>
-                <input type="text" value={form.nombre_completo} onChange={(e) => setForm({ ...form, nombre_completo: e.target.value })} disabled={!!editando} placeholder="Nombre y apellido" className="bg-input border border-secondary rounded-lg p-3 disabled:opacity-50" />
-              </div>
+              {!editando ? (
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Empleado *</label>
+                  <select value={form.id_empleado} onChange={(e) => seleccionarEmpleado(e.target.value)} className="bg-input border border-secondary rounded-lg p-3">
+                    <option value="">Seleccione un empleado…</option>
+                    {empleadosDisponibles.map((e) => (
+                      <option key={e.id_empleado} value={e.id_empleado}>
+                        {e.nombre_completo}{e.puesto ? ` — ${e.puesto}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {empleadosDisponibles.length === 0 && (
+                    <p className="text-xs text-amber-400">No hay empleados disponibles con email y sin usuario. Regístrelos primero en Recursos Humanos.</p>
+                  )}
+                  {form.id_empleado && <p className="text-xs text-subtitle">Nombre: <span className="text-title font-medium">{form.nombre_completo}</span></p>}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium">Nombre Completo</label>
+                  <input type="text" value={form.nombre_completo} disabled className="bg-input border border-secondary rounded-lg p-3 disabled:opacity-50" />
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium flex items-center gap-2"><Mail size={16} /> Email {!editando && "*"}</label>
-                <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} disabled={!!editando} placeholder="correo@ejemplo.com" className="bg-input border border-secondary rounded-lg p-3 disabled:opacity-50" />
+                <input type="email" value={form.email} disabled placeholder="Se toma del empleado seleccionado" className="bg-input border border-secondary rounded-lg p-3 disabled:opacity-50" />
               </div>
               {!editando && (
                 <div className="flex flex-col gap-2">
