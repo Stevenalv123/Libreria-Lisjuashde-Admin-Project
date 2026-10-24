@@ -116,7 +116,7 @@ const filtrarGrupos = (rol) =>
             ...grupo,
             links: rol === "superadmin"
                 ? grupo.links
-                : grupo.links.filter((link) => !rol || link.roles.includes(rol)),
+                : grupo.links.filter((link) => !!rol && link.roles.includes(rol)),
         }))
         .filter((grupo) => grupo.links.length > 0);
 

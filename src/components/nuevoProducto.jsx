@@ -141,13 +141,14 @@ export default function NuevoProducto({ onClose, onProductoAgregado }) {
 
     return (
         <>
-            <div className="bg-primary text-title p-8 rounded-2xl w-full max-w-4xl shadow-lg animate-fade-in border-1 border-secondary">
-                <div className="flex justify-between items-center mb-8">
+            <div className="bg-primary text-title rounded-2xl w-full max-w-4xl shadow-lg animate-fade-in border-1 border-secondary max-h-[90vh] flex flex-col overflow-hidden">
+                <div className="p-6 md:p-8 overflow-y-auto flex-1">
+                <div className="flex justify-between items-center mb-6">
                     <h3 className="text-2xl font-semibold">Nuevo Producto</h3>
                 </div>
 
                 <form onSubmit={handleSubmit}>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                         
                         {/* --- Campos de Producto (iguales) --- */}
                         <div className="flex flex-col gap-2">
@@ -276,16 +277,17 @@ export default function NuevoProducto({ onClose, onProductoAgregado }) {
 
                     </div>
 
-                    <div className="flex justify-end gap-4 mt-8">
-                        <button typet="button" onClick={onClose} className="bg-secondary text-button-text cursor-pointer border border-secondary py-2 px-6 rounded-lg hover:bg-secondary transition-transform hover:scale-110">
+                    <div className="sticky bottom-0 bg-primary pt-3 flex justify-end gap-4 mt-6 border-t border-secondary">
+                        <button type="button" onClick={onClose} className="bg-secondary text-button-text cursor-pointer border border-secondary py-2 px-6 rounded-lg hover:bg-secondary transition-transform hover:scale-110">
                             Cancelar
                         </button>
-                        <button type="submit" className="bg-button text-button py-2 cursor-pointer px-4 rounded-lg hover:bg-[#E8E8E8] transition-transform hover:scale-110 flex items-center gap-2">
+                        <button type="submit" disabled={subiendoImagen} className="bg-button text-button py-2 cursor-pointer px-4 rounded-lg hover:bg-[#E8E8E8] transition-transform hover:scale-110 flex items-center gap-2 disabled:opacity-60">
                             <span className="icon"><Save /></span>
-                            Guardar
+                            {subiendoImagen ? 'Subiendo imagen...' : 'Guardar'}
                         </button>
                     </div>
                 </form>
+                </div>
             </div>
 
             <NuevaCategoria isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveCategoria} />

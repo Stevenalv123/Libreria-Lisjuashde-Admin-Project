@@ -265,7 +265,14 @@ export default function Usuarios() {
               )}
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium flex items-center gap-2"><Mail size={16} /> Email {!editando && "*"}</label>
-                <input type="email" value={form.email} disabled placeholder="Se toma del empleado seleccionado" className="bg-input border border-secondary rounded-lg p-3 disabled:opacity-50" />
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={!editando ? (e) => setForm({ ...form, email: e.target.value }) : undefined}
+                  disabled={!!editando}
+                  placeholder={editando ? "" : "Se toma del empleado (editable si falta)"}
+                  className="bg-input border border-secondary rounded-lg p-3 disabled:opacity-50"
+                />
               </div>
               {!editando && (
                 <div className="flex flex-col gap-2">

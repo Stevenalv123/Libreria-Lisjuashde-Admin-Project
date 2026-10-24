@@ -42,8 +42,9 @@ export default function RecursosHumanos() {
     const restringidoPorSucursal = rol === "admin" || rol === "gerente";
     const idSucursalFiltro = restringidoPorSucursal ? (perfil?.id_sucursal || null) : null;
 
-    const { empleados, isLoading } = useEmpleados(idSucursalFiltro);
-    const { empleados: todosLosEmpleados } = useEmpleados();
+    const { empleados, isLoading, fetchEmpleados } = useEmpleados(idSucursalFiltro);
+    const { empleados: todosLosEmpleados, fetchEmpleados: fetchTodos } = useEmpleados();
+    const refrescarEmpleados = () => { fetchEmpleados(); fetchTodos(); };
 
     const { empleadosActivos, nominaMensual } = useMemo(() => {
         const activos = empleados.filter((e) => e.estado === "Activo");
@@ -218,7 +219,7 @@ export default function RecursosHumanos() {
                             ) : (
                                 <div className="mt-8 flex flex-col gap-4">
                                     {empleados.map((empleado) => (
-                                        <EmpleadosCards key={empleado.id_empleado} {...empleado} rol={rol} />
+                                        <EmpleadosCards key={empleado.id_empleado} {...empleado} rol={rol} onActualizar={refrescarEmpleados} />
                                     ))}
                                 </div>
                             )}
@@ -392,7 +393,7 @@ export default function RecursosHumanos() {
                 <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50 backdrop-blur-sm">
                     <div className="absolute inset-0" onClick={() => setIsModalOpen(false)}></div>
                     <div className="relative z-10 mx-4">
-                        <NuevoEmpleado onClose={() => setIsModalOpen(false)} idSucursalFija={idSucursalFiltro} />
+                        <NuevoEmpleado onClose={() => { setIsModalOpen(false); refrescarEmpleados(); }} idSucursalFija={idSucursalFiltro} />
                     </div>
                 </div>
             )}

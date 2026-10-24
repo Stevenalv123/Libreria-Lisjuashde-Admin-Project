@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Plus, Pencil, Trash2, Save, X, Search } from "lucide-react";
 import { supabase } from "../../supabase/supabaseclient";
 import { registrarAuditoria } from "../../utils/auditoria";
@@ -250,8 +251,8 @@ export default function RRHHCrud({
         )}
       </div>
 
-      {modalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-50 backdrop-blur-sm">
+      {modalOpen && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center bg-black/70 z-[9999] backdrop-blur-sm">
           <div className="absolute inset-0" onClick={() => setModalOpen(false)}></div>
           <div className="relative z-10 mx-4 bg-primary text-title p-8 rounded-2xl w-full max-w-lg shadow-lg border border-secondary max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
@@ -291,7 +292,8 @@ export default function RRHHCrud({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

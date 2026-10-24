@@ -7,6 +7,7 @@ import { useClientes } from '../hooks/useClientes';
 import { generarFacturaPDF } from '../utils/generarFacturaPDF';
 import { supabase } from '../supabase/supabaseclient';
 import { useEmpresa } from '../contexts/empresacontext';
+import { useAuth } from '../contexts/authcontext';
 
 const getFormattedDate = () => {
     const today = new Date();
@@ -39,6 +40,8 @@ export default function NuevaVenta({ onClose }) {
     const [descuentoInput, setDescuentoInput] = useState(0);
     const { crearVenta, ventas } = useVenta();
     const { empresaId } = useEmpresa();
+    const { rol } = useAuth();
+    const esCajero = rol === 'cajero';
     const [numeroFactura, setNumeroFactura] = useState('Generando...');
     const [codigoBarras, setCodigoBarras] = useState('');
 
@@ -230,10 +233,15 @@ export default function NuevaVenta({ onClose }) {
                             />
                         </div>
 
-                        <div className="flex flex-col gap-2">
-                            <label htmlFor="fechavencimiento" className="text-sm font-medium text-title">Fecha de Vencimiento</label>
-                            <input id="fechavencimiento" type="date" className="bg-input border border-secondary rounded-lg p-3 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
-                        </div>
+                        {!esCajero && (
+                            <div className="flex flex-col gap-2">
+                                <label htmlFor="fechavencimiento" className="text-sm font-medium text-title">Fecha de Vencimiento</label>
+                                <input id="fechavencimiento" type="date" className="bg-input border border-secondary rounded-lg p-3 [&::-webkit-calendar-picker-indicator]:invert [&::-webkit-calendar-picker-indicator]:cursor-pointer" />
+                            </div>
+                        )}
+                        {esCajero && (
+                            <input id="fechavencimiento" type="hidden" value="" readOnly />
+                        )}
 
                         <div className="flex flex-col gap-2">
                             <label htmlFor="tipo-pago" className="text-sm font-medium text-title">Tipo de Pago</label>
@@ -242,7 +250,7 @@ export default function NuevaVenta({ onClose }) {
                                 <option value="efectivo">Efectivo</option>
                                 <option value="tarjeta">Tarjeta de Crédito</option>
                                 <option value="transferencia">Transferencia Bancaria</option>
-                                <option value="credito">Credito</option>
+                                {!esCajero && <option value="credito">Crédito</option>}
                             </select>
                         </div>
 
@@ -275,8 +283,8 @@ export default function NuevaVenta({ onClose }) {
                                 />
                             </div>
 
-                            <div className="grid grid-cols-8 gap-x-4 gap-y-4 items-end">
-                                <div className="flex flex-col gap-2 col-span-3">
+                            <div className={`grid gap-x-4 gap-y-4 items-end ${esCajero ? 'grid-cols-6' : 'grid-cols-8'}`}>
+                                <div className={`flex flex-col gap-2 ${esCajero ? 'col-span-3' : 'col-span-3'}`}>
                                     <label htmlFor="producto" className="text-sm font-medium text-title">Producto</label>
                                     <select id="producto" value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)} className="bg-input border border-secondary rounded-lg p-3">
                                         <option value="">Seleccione un producto</option>
@@ -286,15 +294,17 @@ export default function NuevaVenta({ onClose }) {
                                     </select>
                                 </div>
 
-                                <div className="flex flex-col gap-2 col-span-2">
+                                <div className={`flex flex-col gap-2 ${esCajero ? 'col-span-2' : 'col-span-2'}`}>
                                     <label htmlFor="cantidad" className="text-sm font-medium text-title">Cantidad</label>
                                     <input id="cantidad" type="number" step="0.01" value={cantidadInput} onChange={(e) => setCantidadInput(e.target.value)} className="bg-input border border-secondary rounded-lg p-3" />
                                 </div>
 
-                                <div className="flex flex-col gap-2 col-span-2">
-                                    <label htmlFor="descuento" className="text-sm font-medium text-title">Descuento</label>
-                                    <input id="descuento" type="number" step="1" value={descuentoInput} onChange={(e) => setDescuentoInput(e.target.value)} placeholder='15%' className="bg-input border border-secondary rounded-lg p-3" />
-                                </div>
+                                {!esCajero && (
+                                    <div className="flex flex-col gap-2 col-span-2">
+                                        <label htmlFor="descuento" className="text-sm font-medium text-title">Descuento</label>
+                                        <input id="descuento" type="number" step="1" value={descuentoInput} onChange={(e) => setDescuentoInput(e.target.value)} placeholder='15%' className="bg-input border border-secondary rounded-lg p-3" />
+                                    </div>
+                                )}
 
                                 <div className="flex flex-col gap-2 items-end col-gap-1 w-full">
                                     <button type="button" onClick={handleAddProduct} className="bg-button text-button h-12 cursor-pointer w-full flex items-center justify-center rounded-md hover:bg-[#E8E8E8] transition-transform hover:scale-110" aria-label="Agregar producto">
@@ -311,7 +321,7 @@ export default function NuevaVenta({ onClose }) {
                                             <th className="text-center text-sm font-medium text-title">Producto</th>
                                             <th className="text-center text-sm font-medium text-title">Precio</th>
                                             <th className="text-center text-sm font-medium text-title">Cantidad</th>
-                                            <th className="text-center text-sm font-medium text-title">Descuento</th>
+                                            {!esCajero && <th className="text-center text-sm font-medium text-title">Descuento</th>}
                                             <th className="text-center text-sm font-medium text-title">Acciones</th>
                                         </tr>
                                     </thead>
@@ -321,7 +331,7 @@ export default function NuevaVenta({ onClose }) {
                                                 <td className="p-2 text-center">{item.nombre}</td>
                                                 <td className="p-2 text-center">{item.precio}</td>
                                                 <td className="p-2 text-center">{item.cantidad}</td>
-                                                <td className="p-2 text-center">{item.descuento}%</td>
+                                                {!esCajero && <td className="p-2 text-center">{item.descuento}%</td>}
                                                 <td className="p-2 text-center">
                                                     <button type="button" onClick={() => setProductosSeleccionados(prev => prev.filter((_, i) => i !== index))} className="text-red-500 cursor-pointer hover:text-red-700 transition-transform hover:scale-110 flex items-center justify-center w-8 h-8 mx-auto">
                                                         <span className="icon"><Trash size={18} /></span>

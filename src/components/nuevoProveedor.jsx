@@ -80,12 +80,12 @@ export default function NuevoProveedor({ onClose }) {
 
     return (
         <>
-            <div className="bg-primary text-title p-8 rounded-2xl w-full max-w-7xl shadow-lg animate-fade-in border-1 border-secondary">
-                <div className="flex justify-between items-center mb-8">
+            <div className="bg-primary text-title p-6 md:p-8 rounded-2xl w-full max-w-7xl shadow-lg animate-fade-in border-1 border-secondary max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-6">
                     <h3 className="text-2xl font-semibold">Nuevo Proveedor</h3>
                 </div>
                 <form onSubmit={handleSubmit}>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                         <div className="flex flex-col gap-2">
                             <label className="text-sm font-medium text-title">Nombre Comercial</label>
                             <input type="text" required value={nombreComercial} onChange={(e) => setNombreComercial(e.target.value)} placeholder="ej: Pepsi" className="bg-input border border-secondary rounded-lg p-3" />
@@ -153,7 +153,7 @@ export default function NuevoProveedor({ onClose }) {
                         </div>
                     </div>
 
-                    <div className="flex justify-end gap-4 mt-8">
+                    <div className="flex justify-end gap-4 mt-6 sticky bottom-0 bg-primary pt-3">
                         <button type="button" onClick={onClose} className="cursor-pointer bg-secondary text-button-text border border-secondary font-semibold py-2 px-6 rounded-lg hover:bg-button-cancel transition-transform duration-200 ease-in-out hover:scale-110">Cancelar</button>
                         <button type="submit" className="cursor-pointer bg-button text-button font-semibold py-2 px-2 rounded-lg hover:bg-[#E8E8E8] transition-transform duration-200 ease-in-out hover:scale-110 flex flex-row gap-2 items-center">
                             <Save />

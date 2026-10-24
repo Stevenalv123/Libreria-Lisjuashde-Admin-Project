@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState, useContext } from "react";
+import { createContext, useEffect, useState, useContext, useRef } from "react";
 import { supabase } from "../supabase/supabaseclient";
 
 const AuthContext = createContext();
@@ -7,6 +7,7 @@ export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(undefined);
   const [perfil, setPerfil] = useState(null);   // { rol, nombre_completo, ... }
   const [loading, setLoading] = useState(true);
+  const perfilRef = useRef(null);
 
   const cargarPerfil = async (userId) => {
     if (!userId) { setPerfil(null); return null; }
@@ -21,11 +22,20 @@ export const AuthProvider = ({ children }) => {
         .eq("id", userId)
         .single();
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
-      if (error) { console.error("Error cargando perfil:", error.message); setPerfil(null); return null; }
+      if (error) {
+        console.error("Error cargando perfil:", error.message);
+        // Si falla un refresco, conservar el perfil previo del MISMO usuario (no elevar permisos)
+        const previo = perfilRef.current;
+        if (previo && previo.id === userId) return previo;
+        setPerfil(null); return null;
+      }
+      perfilRef.current = data;
       setPerfil(data);
       return data;
     } catch (err) {
       console.error("Timeout o error al cargar perfil:", err.message);
+      const previo = perfilRef.current;
+      if (previo && previo.id === userId) return previo;
       setPerfil(null);
       return null;
     }
@@ -56,8 +66,12 @@ export const AuthProvider = ({ children }) => {
       if (!mounted) return;
       setSession(session);
       if (session?.user) {
-        await cargarPerfil(session.user.id);
+        // Evitar recargar el perfil en refrescos de token del mismo usuario
+        if (perfilRef.current?.id !== session.user.id) {
+          await cargarPerfil(session.user.id);
+        }
       } else {
+        perfilRef.current = null;
         setPerfil(null);
       }
       // Garantizar que loading baje si onAuthStateChange dispara antes que initAuth termine
@@ -119,6 +133,7 @@ export const AuthProvider = ({ children }) => {
     // sin afectar otras apps abiertas (ej. la tienda cliente)
     const { error } = await supabase.auth.signOut({ scope: "local" });
     if (error) console.error("Error logout:", error);
+    perfilRef.current = null;
     setSession(null);
     setPerfil(null);
   };
