@@ -115,31 +115,13 @@ export default function Devoluciones() {
 
     setGuardando(true);
     try {
-      // 1. Insertar cabecera de devolución
-      const { data: dev, error: errDev } = await supabase
-        .from("devoluciones")
-        .insert([{ id_venta: venta.id_venta, id_cajero: user.id, motivo, total: totalDevolucion, estado: "completada", id_empresa: EMPRESA_ID }])
-        .select()
-        .single();
-      if (errDev) throw errDev;
-
-      // 2. Insertar detalle
-      const detalle = seleccionados.map((i) => ({
-        id_devolucion: dev.id,
-        id_producto: i.id_producto,
-        cantidad: i.cantidad_dev,
-        precio_unitario: i.precio_unitario,
-      }));
-      const { error: errDet } = await supabase.from("detalle_devoluciones").insert(detalle);
-      if (errDet) throw errDet;
-
-      // 3. Actualizar inventario (sumar stock de vuelta)
-      for (const i of seleccionados) {
-        const { data: prod } = await supabase.from("productos").select("stock").eq("id_producto", i.id_producto).single();
-        if (prod) {
-          await supabase.from("productos").update({ stock: Number(prod.stock) + i.cantidad_dev }).eq("id_producto", i.id_producto);
-        }
-      }
+      // Registrar devolución vía SP contable (cabecera + detalle + inventario + asiento)
+      const { error: rpcError } = await supabase.rpc("sp_registrar_devolucion", {
+        p_id_venta: venta.id_venta,
+        p_motivo: motivo,
+        p_detalle: seleccionados.map((i) => ({ IdProducto: i.id_producto, Cantidad: i.cantidad_dev })),
+      });
+      if (rpcError) throw rpcError;
 
       await registrarAuditoria(supabase, perfil, "CREAR", "Devoluciones", `Registró devolución de venta #${venta.id_venta} por ${fmt(totalDevolucion)}`);
       toast.success("Devolución registrada y stock actualizado.");

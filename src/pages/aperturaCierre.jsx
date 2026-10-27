@@ -33,6 +33,12 @@ export default function AperturaCierre() {
   const [modalCerrar, setModalCerrar] = useState(false);
   const [formAbrir, setFormAbrir] = useState({ monto_inicial: "", id_terminal: "", id_sucursal: "" });
 
+  // Cierre de caja (arqueo)
+  const [resumenCaja, setResumenCaja] = useState(null);
+  const [cargandoResumen, setCargandoResumen] = useState(false);
+  const [cerrando, setCerrando] = useState(false);
+  const [formCerrar, setFormCerrar] = useState({ contado_efectivo: "", monto_tarjeta: "", monto_transferencia: "", observaciones: "" });
+
   const calcularVentasPeriodo = useCallback(async (desde) => {
     // Suma de ventas en efectivo desde la apertura de caja
     const { data, error } = await supabase
@@ -144,21 +150,61 @@ export default function AperturaCierre() {
     cargar();
   };
 
+  const abrirModalCerrar = async () => {
+    if (!cajaActual) return;
+    setFormCerrar({ contado_efectivo: "", monto_tarjeta: "", monto_transferencia: "", observaciones: "" });
+    setResumenCaja(null);
+    setModalCerrar(true);
+    setCargandoResumen(true);
+    const { data, error } = await supabase.rpc("fn_resumen_caja", { p_id_apertura: cajaActual.id });
+    if (error) {
+      toast.error("Error al cargar resumen: " + error.message);
+    } else {
+      setResumenCaja(data || null);
+    }
+    setCargandoResumen(false);
+  };
+
   const cerrarCaja = async () => {
     if (!cajaActual) return;
-    const montoCierre = Number(cajaActual.monto_inicial) + Number(ventasPeriodo);
-    const { error } = await supabase
-      .from("apertura_caja")
-      .update({ monto_cierre: montoCierre, fecha_cierre: new Date().toISOString(), estado: "cerrada" })
-      .eq("id", cajaActual.id);
+    if (formCerrar.contado_efectivo === "" || Number(formCerrar.contado_efectivo) < 0) {
+      return toast.error("Ingrese el efectivo contado.");
+    }
+    setCerrando(true);
+    const { data, error } = await supabase.rpc("sp_cerrar_caja", {
+      p_id_apertura: cajaActual.id,
+      p_contado_efectivo: Number(formCerrar.contado_efectivo),
+      p_monto_tarjeta: Number(formCerrar.monto_tarjeta || 0),
+      p_monto_transferencia: Number(formCerrar.monto_transferencia || 0),
+      p_detalle: null,
+      p_observaciones: formCerrar.observaciones || null,
+    });
+    setCerrando(false);
     if (error) return toast.error("Error al cerrar caja: " + error.message);
-    await registrarAuditoria(supabase, perfil, "CERRAR_CAJA", "Apertura/Cierre", `Cerró caja. Total: ${fmt(montoCierre)}`);
-    toast.success("Caja cerrada correctamente.");
+
+    const diferencia = Number(data?.diferencia || 0);
+    await registrarAuditoria(supabase, perfil, "CERRAR_CAJA", "Apertura/Cierre", `Cerró caja. Diferencia: ${fmt(diferencia)}`);
     setModalCerrar(false);
+
+    const esCuadre = Math.abs(diferencia) < 0.005;
+    await Swal.fire({
+      title: esCuadre ? "Caja cerrada y cuadrada" : diferencia > 0 ? "Caja cerrada — Sobrante" : "Caja cerrada — Faltante",
+      html: esCuadre
+        ? "El arqueo cuadró exactamente."
+        : `Diferencia de <b>${fmt(Math.abs(diferencia))}</b> (${diferencia > 0 ? "sobrante" : "faltante"}).`,
+      icon: esCuadre ? "success" : "warning",
+      confirmButtonColor: "#2563eb",
+      background: "#152235",
+      color: "#e5e7eb",
+    });
     cargar();
   };
 
   const montoEsperado = cajaActual ? Number(cajaActual.monto_inicial) + Number(ventasPeriodo) : 0;
+
+  // Efectivo esperado según el resumen de la BD (fallback al cálculo local)
+  const efectivoEsperado = resumenCaja ? Number(resumenCaja.efectivo_esperado || 0) : montoEsperado;
+  const diferenciaViva = (Number(formCerrar.contado_efectivo || 0)) - efectivoEsperado;
 
   return (
     <div>
@@ -179,7 +225,7 @@ export default function AperturaCierre() {
             <p className="text-subtitle text-s">Gestiona el arqueo de caja del cajero</p>
           </div>
           {isLoading ? null : cajaActual ? (
-            <button onClick={() => setModalCerrar(true)} className="bg-red-600 text-white flex flex-row h-10 gap-3 p-2 rounded-xl items-center cursor-pointer hover:scale-110 transition">
+            <button onClick={abrirModalCerrar} className="bg-red-600 text-white flex flex-row h-10 gap-3 p-2 rounded-xl items-center cursor-pointer hover:scale-110 transition">
               <DoorClosed /> Cerrar Caja
             </button>
           ) : (
@@ -346,18 +392,65 @@ export default function AperturaCierre() {
           <div className="absolute inset-0" onClick={() => setModalCerrar(false)}></div>
           <div className="relative z-10 mx-4 bg-primary text-title p-8 rounded-2xl w-full max-w-lg shadow-lg border border-secondary">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-semibold">Cerrar Caja</h3>
+              <h3 className="text-2xl font-semibold">Cerrar Caja — Arqueo</h3>
               <button onClick={() => setModalCerrar(false)} className="text-subtitle hover:text-title"><X /></button>
             </div>
-            <div className="flex flex-col gap-3 text-title">
-              <div className="flex justify-between border-b border-secondary pb-2"><span className="text-subtitle">Monto inicial</span><span className="font-semibold">{fmt(cajaActual.monto_inicial)}</span></div>
-              <div className="flex justify-between border-b border-secondary pb-2"><span className="text-subtitle">Ventas del período</span><span className="font-semibold">{fmt(ventasPeriodo)}</span></div>
-              <div className="flex justify-between text-lg"><span className="font-semibold">Total esperado en caja</span><span className="font-bold text-green-400">{fmt(montoEsperado)}</span></div>
-            </div>
-            <div className="flex justify-end gap-4 mt-6">
-              <button type="button" onClick={() => setModalCerrar(false)} className="cursor-pointer bg-secondary border border-secondary font-semibold py-2 px-6 rounded-lg hover:scale-105 transition">Cancelar</button>
-              <button onClick={cerrarCaja} className="cursor-pointer bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:scale-105 transition flex gap-2 items-center"><DoorClosed size={18} /> Confirmar Cierre</button>
-            </div>
+
+            {cargandoResumen ? (
+              <p className="text-subtitle text-center py-6">Cargando resumen de caja...</p>
+            ) : (
+              <>
+                {/* Resumen del período (fn_resumen_caja) */}
+                <div className="bg-secondary/40 rounded-xl p-4 border border-secondary mb-4 text-sm">
+                  <p className="text-subtitle font-semibold mb-2 flex items-center gap-2"><Calculator size={16} /> Resumen del período</p>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-title">
+                    <span className="text-subtitle">Monto inicial</span><span className="text-right font-medium">{fmt(resumenCaja?.monto_inicial ?? cajaActual.monto_inicial)}</span>
+                    <span className="text-subtitle">Ventas efectivo</span><span className="text-right font-medium">{fmt(resumenCaja?.ventas_efectivo)}</span>
+                    <span className="text-subtitle">Ventas tarjeta</span><span className="text-right font-medium">{fmt(resumenCaja?.ventas_tarjeta)}</span>
+                    <span className="text-subtitle">Ventas transferencia</span><span className="text-right font-medium">{fmt(resumenCaja?.ventas_transferencia)}</span>
+                    <span className="text-subtitle">Ventas crédito</span><span className="text-right font-medium">{fmt(resumenCaja?.ventas_credito)}</span>
+                    <span className="text-subtitle">Devoluciones efectivo</span><span className="text-right font-medium">{fmt(resumenCaja?.devoluciones_efectivo)}</span>
+                    <span className="text-title font-semibold border-t border-secondary pt-1 mt-1">Efectivo esperado</span>
+                    <span className="text-right font-bold text-green-400 border-t border-secondary pt-1 mt-1">{fmt(efectivoEsperado)}</span>
+                  </div>
+                </div>
+
+                {/* Arqueo (conteo) */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-title">Efectivo contado (C$) *</label>
+                    <input type="number" step="0.01" value={formCerrar.contado_efectivo} onChange={(e) => setFormCerrar({ ...formCerrar, contado_efectivo: e.target.value })} placeholder="0.00" className="bg-input border border-secondary rounded-lg p-3 text-title" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-sm font-medium text-title">Tarjeta (C$)</label>
+                      <input type="number" step="0.01" value={formCerrar.monto_tarjeta} onChange={(e) => setFormCerrar({ ...formCerrar, monto_tarjeta: e.target.value })} placeholder="0.00" className="bg-input border border-secondary rounded-lg p-3 text-title" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-sm font-medium text-title">Transferencia (C$)</label>
+                      <input type="number" step="0.01" value={formCerrar.monto_transferencia} onChange={(e) => setFormCerrar({ ...formCerrar, monto_transferencia: e.target.value })} placeholder="0.00" className="bg-input border border-secondary rounded-lg p-3 text-title" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-title">Observaciones</label>
+                    <textarea value={formCerrar.observaciones} onChange={(e) => setFormCerrar({ ...formCerrar, observaciones: e.target.value })} rows={2} placeholder="Opcional" className="bg-input border border-secondary rounded-lg p-3 text-title resize-none" />
+                  </div>
+
+                  {/* Diferencia en vivo */}
+                  <div className={`flex justify-between items-center rounded-xl p-3 border ${Math.abs(diferenciaViva) < 0.005 ? "border-green-500/40 bg-green-500/10" : diferenciaViva > 0 ? "border-blue-500/40 bg-blue-500/10" : "border-red-500/40 bg-red-500/10"}`}>
+                    <span className="font-semibold text-title">Diferencia</span>
+                    <span className={`font-bold ${Math.abs(diferenciaViva) < 0.005 ? "text-green-400" : diferenciaViva > 0 ? "text-blue-400" : "text-red-400"}`}>
+                      {fmt(diferenciaViva)} {Math.abs(diferenciaViva) < 0.005 ? "(cuadra)" : diferenciaViva > 0 ? "(sobrante)" : "(faltante)"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-4 mt-6">
+                  <button type="button" onClick={() => setModalCerrar(false)} className="cursor-pointer bg-secondary border border-secondary font-semibold py-2 px-6 rounded-lg hover:scale-105 transition">Cancelar</button>
+                  <button onClick={cerrarCaja} disabled={cerrando} className="cursor-pointer bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:scale-105 transition flex gap-2 items-center disabled:opacity-50"><DoorClosed size={18} /> {cerrando ? "Cerrando..." : "Confirmar Cierre"}</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

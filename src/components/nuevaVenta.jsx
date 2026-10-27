@@ -214,7 +214,7 @@ export default function NuevaVenta({ onClose }) {
                             <div className="flex flex-row gap-2 items-center">
                                 <select id="cliente" className="bg-input border border-secondary rounded-lg p-3 w-full ">
                                     <option value="">Seleccione un cliente</option>
-                                    {clientes.map(c => (
+                                    {clientes.filter(c => c.tipo_cliente === 'mostrador' || c.id_cliente === 1).map(c => (
                                         <option key={c.id_cliente} value={c.id_cliente}>
                                             {c.nombre}
                                         </option>

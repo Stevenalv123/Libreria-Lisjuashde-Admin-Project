@@ -21,7 +21,7 @@ export function useVenta() {
       const { data, error } = await supabase
         .from("ventas")
         .select(
-          "id_venta, numero_factura, id_cliente, fecha_venta, plazo_dias, monto_total, tipo_pago, estado"
+          "id_venta, numero_factura, id_cliente, fecha_venta, plazo_dias, monto_total, tipo_pago, estado, estado_contable, comprobante_id, motivo_anulacion"
         )
         .eq('id_empresa', empresaId)
         .order('fecha_venta', { ascending: false });

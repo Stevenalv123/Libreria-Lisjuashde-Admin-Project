@@ -145,6 +145,9 @@ export default function Proveedores() {
                                                 <th className="py-3 px-2 w-32 text-center">Fecha</th>
                                                 <th className="py-3 px-2 w-32 text-center">Monto Total</th>
                                                 <th className="py-3 px-2 w-32 text-center">Saldo Pendiente</th>
+                                                <th className="py-3 px-2 w-32 text-center">Vencimiento</th>
+                                                <th className="py-3 px-2 w-32 text-center">Estado documento</th>
+                                                <th className="py-3 px-2 w-32 text-center">Estado contable</th>
                                                 <th className="py-3 px-2 w-32 text-center">Estado</th>
                                                 <th className="py-3 px-2 w-32 text-center">Acciones</th>
                                             </tr>
@@ -157,6 +160,17 @@ export default function Proveedores() {
                                                     <td className="py-3 px-2 text-center">{format(new Date(c.fecha_compra), 'dd/MM/yyyy')}</td>
                                                     <td className="py-3 px-2 text-center">{formatCurrency(c.monto_total)}</td>
                                                     <td className="py-3 px-2 text-center font-semibold">{formatCurrency(c.saldo_pendiente)}</td>
+                                                    <td className="py-3 px-2 text-center text-subtitle">{c.fecha_vencimiento ? format(new Date(c.fecha_vencimiento), 'dd/MM/yyyy') : "—"}</td>
+                                                    <td className="py-3 px-2 text-center">
+                                                        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-blue-600/20 text-blue-400">
+                                                            {c.estado_documento || "—"}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 px-2 text-center">
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${c.estado_contable === "CONTABILIZADO" ? "bg-green-600/20 text-green-400" : c.estado_contable === "ANULADO" ? "bg-red-600/20 text-red-400" : "bg-yellow-600/20 text-yellow-400"}`}>
+                                                            {c.estado_contable || "PENDIENTE"}
+                                                        </span>
+                                                    </td>
                                                     <td className="py-3 px-2 text-center">
                                                         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${c.saldo_pendiente === 0
                                                             ? 'bg-green-600/50 text-white-400'

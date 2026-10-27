@@ -29,6 +29,13 @@ import Transferencias from '../pages/transferencias';
 import Configuracion from '../pages/configuracion';
 import Login from '../pages/login';
 import ProtectedRoute from './protectedroute';
+import PlanCuentas from '../pages/planCuentas';
+import ConfigContable from '../pages/configContable';
+import PeriodosContables from '../pages/periodosContables';
+import LibroMayor from '../pages/libroMayor';
+import Comprobantes from '../pages/comprobantes';
+import AntiguedadSaldos from '../pages/antiguedadSaldos';
+import ConciliacionBancaria from '../pages/conciliacionBancaria';
 
 const router = createBrowserRouter([
   {
@@ -75,6 +82,13 @@ const router = createBrowserRouter([
               { path: 'auditoria', element: <Auditoria /> },
               { path: 'transferencias', element: <Transferencias /> },
               { path: 'configuracion', element: <Configuracion /> },
+              { path: 'planCuentas', element: <PlanCuentas /> },
+              { path: 'configContable', element: <ConfigContable /> },
+              { path: 'periodosContables', element: <PeriodosContables /> },
+              { path: 'libroMayor', element: <LibroMayor /> },
+              { path: 'comprobantes', element: <Comprobantes /> },
+              { path: 'antiguedadSaldos', element: <AntiguedadSaldos /> },
+              { path: 'conciliacionBancaria', element: <ConciliacionBancaria /> },
               // Si estás en '/dashboard', redirige a 'ventas'
               { index: true, element: <Navigate to="ventas" replace /> }
             ]

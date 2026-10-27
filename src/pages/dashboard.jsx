@@ -3,7 +3,8 @@ import {
     Users, Wallet, Wrench, FileSpreadsheetIcon, ChartColumn, TrendingUp,
     Sun, Moon, Lightbulb, Menu, X, ShoppingBag, Printer,
     Building2, Monitor, DoorOpen, RotateCcw, ScrollText, ArrowLeftRight,
-    Megaphone, BarChart3, Settings
+    Megaphone, BarChart3, Settings,
+    ListTree, BookText, BookOpen, Clock, Scale, CalendarClock, SlidersHorizontal
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
@@ -46,6 +47,18 @@ const navGroups = [
             { to: "estadosFinancieros", label: 'Estados Financieros', icon: FileSpreadsheetIcon, roles: ["admin", "vendedor", "gerente"] },
             { to: "analisis",           label: 'Análisis',           icon: ChartColumn,         roles: ["admin", "vendedor", "gerente"] },
             { to: "proyecciones",       label: 'Proyecciones',       icon: TrendingUp,          roles: ["admin", "vendedor", "gerente"] },
+        ],
+    },
+    {
+        section: "Contabilidad",
+        links: [
+            { to: "planCuentas",          label: 'Plan de Cuentas',       icon: ListTree,          roles: ["admin", "gerente", "vendedor"] },
+            { to: "comprobantes",         label: 'Libro Diario',          icon: BookText,          roles: ["admin", "gerente", "vendedor"] },
+            { to: "libroMayor",           label: 'Libro Mayor',           icon: BookOpen,          roles: ["admin", "gerente", "vendedor"] },
+            { to: "antiguedadSaldos",     label: 'Antigüedad de Saldos',  icon: Clock,             roles: ["admin", "gerente", "vendedor"] },
+            { to: "conciliacionBancaria", label: 'Conciliación Bancaria', icon: Scale,             roles: ["admin", "gerente"] },
+            { to: "periodosContables",    label: 'Períodos Contables',    icon: CalendarClock,     roles: ["admin", "gerente"] },
+            { to: "configContable",       label: 'Config. Contable',      icon: SlidersHorizontal, roles: ["admin", "gerente"] },
         ],
     },
     {

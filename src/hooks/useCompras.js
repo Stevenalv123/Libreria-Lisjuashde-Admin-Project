@@ -18,7 +18,18 @@ export function useCompras() {
                 p_id_empresa: empresaId
             });
             if (error) throw error;
-            setCompras(data || []);
+
+            // Enriquecer con estado_documento, estado_contable y fecha_vencimiento
+            const { data: extra, error: extraError } = await supabase
+                .from('compras')
+                .select('id_compra, estado_documento, estado_contable, fecha_vencimiento')
+                .eq('id_empresa', empresaId);
+            if (extraError) throw extraError;
+
+            const mapaExtra = {};
+            (extra || []).forEach((c) => { mapaExtra[c.id_compra] = c; });
+            const fusionadas = (data || []).map((c) => ({ ...c, ...(mapaExtra[c.id_compra] || {}) }));
+            setCompras(fusionadas);
         } catch (error) {
             toast.error(`Error al cargar compras: ${error.message}`);
         } finally {

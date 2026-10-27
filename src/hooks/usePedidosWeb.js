@@ -29,7 +29,7 @@ export function usePedidosWeb() {
       const { data, error } = await supabase
         .from("pedidos_web")
         .select(
-          "id_pedido, numero_orden, id_empresa, user_id, nombre_cliente, telefono, email, total, metodo_pago, tipo_entrega, notas, estado, id_venta, created_at, pedidos_web_items ( id_item, id_producto, nombre, cantidad, precio_unitario, imagen )"
+          "id_pedido, numero_orden, id_empresa, user_id, nombre_cliente, telefono, email, total, metodo_pago, tipo_entrega, notas, estado, estado_pago, id_venta, created_at, pedidos_web_items ( id_item, id_producto, nombre, cantidad, precio_unitario, imagen )"
         )
         .eq("id_empresa", empresaId)
         .order("created_at", { ascending: false });
@@ -61,6 +61,23 @@ export function usePedidosWeb() {
       return true;
     } catch (err) {
       console.error("Error actualizando pedido:", err.message);
+      setError(err.message);
+      return false;
+    }
+  };
+
+  // Actualiza únicamente el estado de pago del pedido (Pendiente/Simulado/Confirmado).
+  const cambiarEstadoPago = async (idPedido, nuevoEstadoPago) => {
+    try {
+      const { error } = await supabase
+        .from("pedidos_web")
+        .update({ estado_pago: nuevoEstadoPago })
+        .eq("id_pedido", idPedido);
+      if (error) throw error;
+      await fetchPedidos();
+      return true;
+    } catch (err) {
+      console.error("Error actualizando estado de pago:", err.message);
       setError(err.message);
       return false;
     }
@@ -110,5 +127,5 @@ export function usePedidosWeb() {
     }
   };
 
-  return { pedidos, isLoading, error, fetchPedidos, cambiarEstado, aceptarPedido };
+  return { pedidos, isLoading, error, fetchPedidos, cambiarEstado, cambiarEstadoPago, aceptarPedido };
 }

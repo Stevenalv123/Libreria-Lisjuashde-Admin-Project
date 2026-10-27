@@ -14,8 +14,14 @@ const ESTADO_BADGE = {
   Rechazado: "bg-red-500/20 text-red-400",
 };
 
+const PAGO_BADGE = {
+  Pendiente: "bg-yellow-500/20 text-yellow-500",
+  Simulado: "bg-blue-500/20 text-blue-400",
+  Confirmado: "bg-green-500/20 text-green-400",
+};
+
 export default function PedidosWeb() {
-  const { pedidos, isLoading, error, aceptarPedido, cambiarEstado } = usePedidosWeb();
+  const { pedidos, isLoading, error, aceptarPedido, cambiarEstado, cambiarEstadoPago } = usePedidosWeb();
   const [activeTab, setActiveTab] = useState("activos");
   const [busqueda, setBusqueda] = useState("");
 
@@ -130,6 +136,7 @@ export default function PedidosWeb() {
                       <div className="flex items-center gap-2">
                         <span className="text-title font-bold">Orden {p.numero_orden || `P-${String(p.id_pedido).padStart(4, "0")}`}</span>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ESTADO_BADGE[p.estado] || "bg-secondary text-subtitle"}`}>{p.estado}</span>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${PAGO_BADGE[p.estado_pago] || "bg-secondary text-subtitle"}`}>Pago: {p.estado_pago || "Pendiente"}</span>
                       </div>
                       <span className="text-subtitle text-sm">{p.created_at ? format(new Date(p.created_at), "dd/MM/yyyy HH:mm") : ""}</span>
                     </div>
@@ -162,7 +169,17 @@ export default function PedidosWeb() {
                     </table>
                   </div>
 
-                  <div className="flex flex-wrap gap-2 justify-end">
+                  <div className="flex flex-wrap gap-2 justify-end items-center">
+                    <label className="text-subtitle text-sm">Estado de pago:</label>
+                    <select
+                      value={p.estado_pago || "Pendiente"}
+                      onChange={(e) => cambiarEstadoPago(p.id_pedido, e.target.value)}
+                      className="bg-input border border-secondary rounded-lg px-3 py-1.5 text-title text-sm outline-none focus:border-title/60"
+                    >
+                      <option value="Pendiente">Pendiente</option>
+                      <option value="Simulado">Simulado</option>
+                      <option value="Confirmado">Confirmado</option>
+                    </select>
                     {p.estado === "Pendiente" && (
                       <>
                         <button onClick={() => handleRechazar(p)} className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-red-500/20 text-red-400 hover:bg-red-500/30 cursor-pointer">Rechazar</button>
