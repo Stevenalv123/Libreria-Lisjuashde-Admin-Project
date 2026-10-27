@@ -2,7 +2,7 @@ import StatsCards from "../components/statscards";
 import Tabs from "../components/tabs";
 import NuevoMovCajas from "../components/nuevomovcajas";
 import { useState, useEffect, useMemo } from "react";
-import { TrendingUp, TrendingDown, Plus, Pencil, Trash, DollarSign, Banknote, Wallet, CreditCard } from "lucide-react";
+import { TrendingUp, TrendingDown, Plus, Pencil, Trash, DollarSign, Banknote, Wallet, CreditCard, RotateCcw } from "lucide-react";
 import { useCajasBancos } from "../hooks/useCajasBancos";
 import Swal from "sweetalert2";
 import { toast } from "react-hot-toast";
@@ -35,7 +35,7 @@ export default function CajasBancos() {
     const {
         movimientos,
         isLoading,
-        eliminarMovimiento,
+        revertirMovimiento,
         isDeletingMov
     } = useCajasBancos();
 
@@ -94,34 +94,40 @@ export default function CajasBancos() {
 
     const formatMoney = (amount) => `C$ ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    const handleEliminarMovimiento = async (id, descripcion) => {
-        const descText = descripcion || "este movimiento";
-
-        Swal.fire({
-            title: '¿Estás seguro?',
-            text: `Esta acción no se puede revertir. Se eliminará ${descText}.`,
+    const handleRevertirMovimiento = async (m) => {
+        if (!m.comprobante_id) {
+            toast.error("Este movimiento no tiene comprobante asociado y no puede revertirse.");
+            return;
+        }
+        if (m.comprobantes?.estado === 'ANULADO') {
+            toast.error("Este comprobante ya fue anulado.");
+            return;
+        }
+        const { value: motivo, isConfirmed } = await Swal.fire({
+            title: 'Revertir movimiento',
+            text: `Se creará un asiento espejo que reversa el comprobante ${m.comprobantes?.numero || `#${m.comprobante_id}`}.`,
+            input: 'text',
+            inputPlaceholder: 'Motivo de la reversión',
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#d33',
             cancelButtonColor: '#262626',
-            confirmButtonText: 'Sí, ¡eliminar!',
+            confirmButtonText: 'Sí, revertir',
             cancelButtonText: 'Cancelar',
             background: '#090909',
             color: '#fff',
-            customClass: {
-                popup: 'border border-secondary rounded-2xl'
-            }
-        }).then(async (result) => {
-            if (result.isConfirmed) {
-                const { success, message } = await eliminarMovimiento(id);
-
-                if (success) {
-                    toast.success('✅ Movimiento eliminado correctamente');
-                } else {
-                    toast.error(`⚠️ Error al eliminar: ${message}`);
-                }
-            }
+            inputValidator: (v) => (!v ? 'Debe indicar un motivo' : undefined),
+            customClass: { popup: 'border border-secondary rounded-2xl' }
         });
+
+        if (isConfirmed) {
+            const { success, message } = await revertirMovimiento(m.comprobante_id, motivo);
+            if (success) {
+                toast.success('✅ Movimiento revertido correctamente');
+            } else {
+                toast.error(`⚠️ Error al revertir: ${message}`);
+            }
+        }
     };
 
     const handlePagarCuota = async (idPrestamo, montoCuota) => {
@@ -218,6 +224,7 @@ export default function CajasBancos() {
                                                     <tr className="border-b border-secondary/50 text-sm font-semibold text-subtitle">
                                                         <th className="py-3 px-4 text-center">Fecha</th>
                                                         <th className="py-3 px-4 text-center">Cuenta</th>
+                                                        <th className="py-3 px-4 text-center">Comprobante</th>
                                                         <th className="py-3 px-4 text-center">Descripción</th>
                                                         <th className="py-3 px-4 text-center">Tipo</th>
                                                         <th className="py-3 px-4 text-center">Monto</th>
@@ -229,6 +236,13 @@ export default function CajasBancos() {
                                                         <tr key={m.id_movimiento} className="border-t border-secondary text-sm hover:bg-secondary/10 transition-colors">
                                                             <td className="py-4 px-4 font-medium text-title text-center">{format(new Date(m.fecha), 'dd/MM/yyyy')}</td>
                                                             <td className="py-4 px-4 text-title text-center">{m.cuentas_empresa?.nombre || "N/A"}</td>
+                                                            <td className="py-4 px-4 text-title text-center">
+                                                                {m.comprobantes?.numero ? (
+                                                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${m.comprobantes?.estado === 'ANULADO' ? 'bg-red-600/20 text-red-300' : 'bg-blue-600/20 text-blue-300'}`}>
+                                                                        {m.comprobantes.numero}
+                                                                    </span>
+                                                                ) : <span className="text-subtitle">—</span>}
+                                                            </td>
                                                             <td className="py-4 px-4 text-title text-center">{m.descripcion || "-"}</td>
                                                             <td className="py-4 px-4 text-center">
                                                                 <span className={`px-2.5 py-1 rounded-full text-sm font-semibold ${m.tipo === 'DEBE'
@@ -240,17 +254,14 @@ export default function CajasBancos() {
                                                             </td>
                                                             <td className="py-4 px-4 font-mono text-title text-center">C${parseFloat(m.monto).toFixed(2)}</td>
                                                             <td className="py-4 px-4">
-                                                                <div className="flex justify-center gap-8">
-                                                                    <button title="Editar Movimiento" className="text-blue-400 hover:text-blue-300 transition-colors transform hover:scale-110 cursor-pointer">
-                                                                        <Pencil size={18} />
-                                                                    </button>
+                                                                <div className="flex justify-center gap-4">
                                                                     <button
-                                                                        title="Eliminar Movimiento"
-                                                                        className="text-red-500 hover:text-red-400 transition-colors transform hover:scale-110 cursor-pointer"
-                                                                        onClick={() => handleEliminarMovimiento(m.id_movimiento, m.descripcion)}
-                                                                        disabled={isDeletingMov}
+                                                                        title="Revertir Movimiento"
+                                                                        className="text-red-500 hover:text-red-400 transition-colors transform hover:scale-110 cursor-pointer flex items-center gap-2 border border-secondary rounded-lg px-3 py-1 disabled:opacity-40"
+                                                                        onClick={() => handleRevertirMovimiento(m)}
+                                                                        disabled={isDeletingMov || !m.comprobante_id || m.comprobantes?.estado === 'ANULADO'}
                                                                     >
-                                                                        <Trash size={18} />
+                                                                        <RotateCcw size={16} /> Revertir
                                                                     </button>
                                                                 </div>
                                                             </td>

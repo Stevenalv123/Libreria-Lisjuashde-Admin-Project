@@ -26,6 +26,7 @@ import Devoluciones from '../pages/devoluciones';
 import Usuarios from '../pages/usuarios';
 import Auditoria from '../pages/auditoria';
 import Transferencias from '../pages/transferencias';
+import Configuracion from '../pages/configuracion';
 import Login from '../pages/login';
 import ProtectedRoute from './protectedroute';
 
@@ -73,6 +74,7 @@ const router = createBrowserRouter([
               { path: 'usuarios', element: <Usuarios /> },
               { path: 'auditoria', element: <Auditoria /> },
               { path: 'transferencias', element: <Transferencias /> },
+              { path: 'configuracion', element: <Configuracion /> },
               // Si estás en '/dashboard', redirige a 'ventas'
               { index: true, element: <Navigate to="ventas" replace /> }
             ]

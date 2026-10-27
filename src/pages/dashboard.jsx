@@ -3,13 +3,15 @@ import {
     Users, Wallet, Wrench, FileSpreadsheetIcon, ChartColumn, TrendingUp,
     Sun, Moon, Lightbulb, Menu, X, ShoppingBag, Printer,
     Building2, Monitor, DoorOpen, RotateCcw, ScrollText, ArrowLeftRight,
-    Megaphone, BarChart3
+    Megaphone, BarChart3, Settings
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/authcontext";
 import { useTheme } from "../contexts/themecontext";
 import Swal from "sweetalert2";
+import { useSettings } from "../contexts/settingscontext";
+import Avatar from "../components/avatar";
 
 // Navegación agrupada por secciones. Cada enlace declara qué roles pueden verlo.
 // Roles del sistema: superadmin (ve TODO), admin, gerente, cajero, despacho.
@@ -72,17 +74,23 @@ const navGroups = [
             { to: "auditoria",     label: 'Auditoría',           icon: ScrollText, roles: [] }, // solo superadmin
         ],
     },
+    {
+        section: "Cuenta",
+        links: [
+            { to: "configuracion", label: 'Configuración', icon: Settings, roles: ["admin", "vendedor", "gerente", "cajero", "despacho"] },
+        ],
+    },
 ];
 
 // Componente de enlace reutilizable (estilo sidebar corporativo).
-const AppLink = ({ to, icon: Icon, label, onClick }) => (
+const AppLink = ({ to, icon: Icon, label, onClick, t = (x) => x }) => (
     <NavLink
         to={to}
         onClick={onClick}
         className={({ isActive }) => `erp-navlink ${isActive ? "active" : ""}`}
     >
         <Icon size={18} className="shrink-0" />
-        <span className="truncate">{label}</span>
+        <span className="truncate">{t(label)}</span>
     </NavLink>
 );
 
@@ -93,15 +101,6 @@ const ROL_LABEL = {
     cajero: "Cajero",
     despacho: "Despacho",
     vendedor: "Vendedor",
-};
-
-// Obtiene las iniciales (máx. 2) del nombre del usuario.
-const obtenerIniciales = (nombre) => {
-    if (!nombre) return "?";
-    const partes = nombre.trim().split(/\s+/).filter(Boolean);
-    if (partes.length === 0) return "?";
-    if (partes.length === 1) return partes[0].slice(0, 2).toUpperCase();
-    return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
 };
 
 // Filtra un grupo de enlaces según el rol.
@@ -116,15 +115,15 @@ const filtrarGrupos = (rol) =>
         .filter((grupo) => grupo.links.length > 0);
 
 // Renderiza la navegación agrupada con encabezados de sección.
-const NavSecciones = ({ grupos, onLinkClick }) => (
+const NavSecciones = ({ grupos, onLinkClick, t }) => (
     <nav className="flex-1 flex flex-col gap-0.5">
         {grupos.map((grupo) => (
             <div key={grupo.section} className="flex flex-col gap-0.5">
                 <p className="erp-sidebar-section text-[0.68rem] font-semibold uppercase tracking-wider px-3 mt-5 mb-1.5">
-                    {grupo.section}
+                    {t(grupo.section)}
                 </p>
                 {grupo.links.map((link) => (
-                    <AppLink key={link.to} {...link} onClick={onLinkClick} />
+                    <AppLink key={link.to} {...link} onClick={onLinkClick} t={t} />
                 ))}
             </div>
         ))}
@@ -133,8 +132,8 @@ const NavSecciones = ({ grupos, onLinkClick }) => (
 
 // Contenido reutilizable del sidebar (escritorio + drawer móvil).
 const SidebarContent = ({
-    grupos, iniciales, nombreUsuario, rolLabel,
-    theme, toggleTheme, onLogout, onLinkClick,
+    grupos, avatarUrl, nombreUsuario, rolLabel,
+    theme, toggleTheme, onLogout, onLinkClick, onPerfil, t,
 }) => (
     <div className="flex flex-col h-full">
         {/* Logo + empresa */}
@@ -144,13 +143,13 @@ const SidebarContent = ({
                 <h3 className="erp-sidebar-text text-[0.95rem] font-bold" style={{ color: "var(--sidebar-text-active)" }}>
                     Librería Lisjuashde
                 </h3>
-                <span className="erp-sidebar-section text-xs">Panel Administrativo</span>
+                <span className="erp-sidebar-section text-xs">{t("Panel Administrativo")}</span>
             </div>
         </div>
 
         {/* Navegación (scrollable) */}
         <div className="flex-1 overflow-y-auto px-3 pb-3">
-            <NavSecciones grupos={grupos} onLinkClick={onLinkClick} />
+            <NavSecciones grupos={grupos} onLinkClick={onLinkClick} t={t} />
         </div>
 
         {/* Pie del sidebar: tema + usuario + salir */}
@@ -161,22 +160,22 @@ const SidebarContent = ({
                 style={{ borderLeftColor: "transparent" }}
             >
                 {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-                <span>{theme === 'dark' ? 'Tema Claro' : 'Tema Oscuro'}</span>
+                <span>{theme === 'dark' ? t('Tema Claro') : t('Tema Oscuro')}</span>
             </button>
 
             <div className="erp-sidebar-user flex items-center gap-3 rounded-lg p-2.5">
-                <div className="h-9 w-9 rounded-full bg-button text-button flex items-center justify-center font-bold text-xs shrink-0">
-                    {iniciales}
-                </div>
-                <div className="flex flex-col leading-tight overflow-hidden flex-1">
+                <button onClick={onPerfil} title={t("Configuración")} className="shrink-0 rounded-full">
+                    <Avatar src={avatarUrl} nombre={nombreUsuario} size={38} />
+                </button>
+                <div className="flex flex-col leading-tight overflow-hidden flex-1 cursor-pointer" onClick={onPerfil}>
                     <span className="text-xs font-semibold truncate" style={{ color: "var(--sidebar-text-active)" }}>
                         {nombreUsuario}
                     </span>
-                    {rolLabel && <span className="erp-sidebar-section text-[0.68rem]">{rolLabel}</span>}
+                    {rolLabel && <span className="erp-sidebar-section text-[0.68rem]">{t(rolLabel)}</span>}
                 </div>
                 <button
                     onClick={onLogout}
-                    title="Cerrar sesión"
+                    title={t("Cerrar sesión")}
                     className="erp-sidebar-text p-1.5 rounded-md hover:text-white shrink-0"
                     style={{ transition: "color .15s ease" }}
                 >
@@ -190,6 +189,7 @@ const SidebarContent = ({
 export default function Dashboard() {
     const { session, perfil, rol, logoutUser } = useAuth();
     const { theme, toggleTheme } = useTheme();
+    const { settings, t, locale } = useSettings();
     const navigate = useNavigate();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [ahora, setAhora] = useState(new Date());
@@ -204,12 +204,16 @@ export default function Dashboard() {
 
     const nombreUsuario = perfil?.nombre_completo || session?.user?.email || "Cargando...";
     const rolLabel = ROL_LABEL[rol] || "";
-    const iniciales = obtenerIniciales(perfil?.nombre_completo || session?.user?.email);
+    const avatarUrl = perfil?.avatar_url || null;
+    const irPerfil = () => { setIsMobileMenuOpen(false); navigate("configuracion"); };
 
-    const fechaTexto = ahora.toLocaleDateString("es-NI", {
-        weekday: "long", day: "numeric", month: "long", year: "numeric",
-    });
-    const horaTexto = ahora.toLocaleTimeString("es-NI", { hour: "2-digit", minute: "2-digit" });
+    const FORMATOS_FECHA = {
+        largo: { weekday: "long", day: "numeric", month: "long", year: "numeric" },
+        medio: { day: "numeric", month: "short", year: "numeric" },
+        corto: { day: "2-digit", month: "2-digit", year: "numeric" },
+    };
+    const fechaTexto = ahora.toLocaleDateString(locale, FORMATOS_FECHA[settings.formatoFecha] || FORMATOS_FECHA.largo);
+    const horaTexto = ahora.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 
     const handleLogout = async () => {
         const result = await Swal.fire({
@@ -259,7 +263,9 @@ export default function Dashboard() {
             <aside className="erp-sidebar hidden md:flex md:flex-col w-64 border-r fixed top-0 left-0 h-screen z-30">
                 <SidebarContent
                     grupos={gruposVisibles}
-                    iniciales={iniciales}
+                    avatarUrl={avatarUrl}
+                    onPerfil={irPerfil}
+                    t={t}
                     nombreUsuario={nombreUsuario}
                     rolLabel={rolLabel}
                     theme={theme}
@@ -284,7 +290,7 @@ export default function Dashboard() {
                             <Menu size={24} />
                         </button>
 
-                        <div className="hidden md:flex flex-col leading-tight">
+                        <div className={`${settings.mostrarReloj ? "hidden md:flex" : "hidden"} flex-col leading-tight`}>
                             <span className="text-title text-sm font-semibold capitalize">{fechaTexto}</span>
                             <span className="text-subtitle text-xs">{horaTexto}</span>
                         </div>
@@ -294,15 +300,21 @@ export default function Dashboard() {
 
                     {/* Derecha: avatar + tema + salir */}
                     <div className="flex items-center gap-2 md:gap-3">
-                        <div className="hidden sm:flex items-center gap-2.5 pr-1">
-                            <div className="h-9 w-9 rounded-full bg-button text-button flex items-center justify-center font-bold text-xs shrink-0">
-                                {iniciales}
-                            </div>
-                            <div className="hidden md:flex flex-col leading-tight">
+                        <button onClick={irPerfil} title={t("Mi cuenta")} className="flex items-center gap-2.5 pr-1 rounded-lg hover:bg-secondary p-1 transition-colors">
+                            <Avatar src={avatarUrl} nombre={nombreUsuario} size={36} />
+                            <div className="hidden md:flex flex-col leading-tight text-left">
                                 <span className="text-title text-sm font-semibold">{nombreUsuario}</span>
-                                {rolLabel && <span className="text-subtitle text-xs">{rolLabel}</span>}
+                                {rolLabel && <span className="text-subtitle text-xs">{t(rolLabel)}</span>}
                             </div>
-                        </div>
+                        </button>
+
+                        <button
+                            onClick={() => navigate("configuracion")}
+                            title={t("Configuración")}
+                            className="text-title border border-secondary p-2 rounded-lg hidden sm:flex items-center justify-center cursor-pointer hover:bg-secondary transition-colors"
+                        >
+                            <Settings size={18} />
+                        </button>
 
                         <button
                             onClick={toggleTheme}
@@ -317,13 +329,13 @@ export default function Dashboard() {
                             className="btn-secondary"
                         >
                             <LogOut size={18} />
-                            <span className="hidden md:inline">Salir</span>
+                            <span className="hidden md:inline">{t("Salir")}</span>
                         </button>
                     </div>
                 </header>
 
                 {/* --- CONTENIDO DE LA PÁGINA --- */}
-                <main className="flex-1 p-4 md:p-6 lg:p-7 flex flex-col gap-5">
+                <main className="erp-main flex-1 p-4 md:p-6 lg:p-7 flex flex-col gap-5">
                     <Outlet />
                 </main>
             </div>
@@ -347,7 +359,9 @@ export default function Dashboard() {
                         </button>
                         <SidebarContent
                             grupos={gruposVisibles}
-                            iniciales={iniciales}
+                            avatarUrl={avatarUrl}
+                    onPerfil={irPerfil}
+                    t={t}
                             nombreUsuario={nombreUsuario}
                             rolLabel={rolLabel}
                             theme={theme}
