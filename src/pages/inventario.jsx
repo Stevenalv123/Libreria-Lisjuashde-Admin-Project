@@ -2,14 +2,79 @@ import StatsCards from "../components/statscards";
 import Tabs from "../components/tabs";
 import NuevoProducto from "../components/nuevoProducto";
 import EditarProducto from "../components/editarProducto";
-import { useState } from "react";
-import { Box, TrendingUp, TrendingDown, CircleAlert, ArrowLeftRight, Plus, ShoppingBasket, Pencil, Trash, Printer, Barcode } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Box, TrendingUp, TrendingDown, CircleAlert, ArrowLeftRight, Plus, ShoppingBasket, Pencil, Trash, Printer, Barcode, SlidersHorizontal, Building2 } from "lucide-react";
 import { useProductos } from "../hooks/useProductos";
+import { useAuth } from "../contexts/authcontext";
+import { supabase } from "../supabase/supabaseclient";
 import Swal from "sweetalert2";
 import { toast } from "react-hot-toast";
 import { generarCodigoEAN13, imprimirCodigosBarras } from "../utils/generarCodigoBarras";
 
+const EMPRESA_ID = 1;
+
 export default function Inventario() {
+    const { perfil, rol } = useAuth();
+    const esSuperadmin = rol === "superadmin";
+
+    // Selector de sucursal: superadmin puede ver "Todas" o una sucursal;
+    // los demás quedan fijados a su sucursal asignada.
+    const [sucursales, setSucursales] = useState([]);
+    const [sucursalSel, setSucursalSel] = useState(esSuperadmin ? "" : "");
+    const [stockMap, setStockMap] = useState({}); // id_producto -> { stock, stock_minimo }
+
+    useEffect(() => {
+        supabase.from("sucursales").select("id, nombre").eq("id_empresa", EMPRESA_ID).eq("estado", true).order("id")
+            .then(({ data }) => setSucursales(data || []));
+    }, []);
+
+    // Fijar la sucursal del perfil para roles no superadmin.
+    useEffect(() => {
+        if (!esSuperadmin && perfil?.id_sucursal) setSucursalSel(String(perfil.id_sucursal));
+    }, [esSuperadmin, perfil]);
+
+    const cargarStockSucursal = useCallback(async () => {
+        if (!sucursalSel) { setStockMap({}); return; }
+        const { data } = await supabase
+            .from("v_stock_sucursal")
+            .select("id_producto, stock, stock_minimo")
+            .eq("id_sucursal", Number(sucursalSel));
+        const mapa = {};
+        (data || []).forEach((r) => { mapa[r.id_producto] = { stock: r.stock, stock_minimo: r.stock_minimo }; });
+        setStockMap(mapa);
+    }, [sucursalSel]);
+
+    useEffect(() => { cargarStockSucursal(); }, [cargarStockSucursal]);
+
+    // Stock a mostrar: por sucursal si hay una seleccionada; global si "Todas".
+    const verPorSucursal = !!sucursalSel;
+    const stockDe = (p) => verPorSucursal ? Number(stockMap[p.id_producto]?.stock ?? 0) : Number(p.stock ?? 0);
+    const stockMinDe = (p) => verPorSucursal ? Number(stockMap[p.id_producto]?.stock_minimo ?? p.stock_minimo ?? 0) : Number(p.stock_minimo ?? 0);
+
+    const ajustarStock = async (p) => {
+        if (!verPorSucursal) { toast.error("Seleccione una sucursal para ajustar el stock físico."); return; }
+        const { value } = await Swal.fire({
+            title: `Ajustar stock físico`,
+            html: `<p style="font-size:14px;margin-bottom:8px">${p.nombre}</p>`,
+            input: "number",
+            inputValue: stockDe(p),
+            inputLabel: `Nuevo stock contado en la sucursal`,
+            background: "#152235", color: "#fff",
+            showCancelButton: true, confirmButtonText: "Guardar ajuste", cancelButtonText: "Cancelar",
+            confirmButtonColor: "#2563eb",
+            inputValidator: (v) => (v === "" || Number(v) < 0) && "Ingrese un valor válido (>= 0)",
+        });
+        if (value === undefined) return;
+        const { error } = await supabase.rpc("sp_ajustar_stock_sucursal", {
+            p_id_producto: p.id_producto,
+            p_id_sucursal: Number(sucursalSel),
+            p_nuevo_stock: Number(value),
+        });
+        if (error) { Swal.fire({ icon: "error", title: "No se pudo ajustar", text: error.message, background: "#152235", color: "#fff" }); return; }
+        toast.success("Stock ajustado.");
+        cargarStockSucursal();
+    };
+
     const tabs = [
         { key: "productos", label: "Productos", icon: <ShoppingBasket size={16} /> },
         { key: "movimientos", label: "Movimientos", icon: <ArrowLeftRight size={16} /> }
@@ -22,7 +87,7 @@ export default function Inventario() {
 
     const valorTotalInventario = productos.reduce((total, producto) => {
         if (!producto) return total;
-        return total + (producto.stock * producto.precio_compra);
+        return total + (stockDe(producto) * producto.precio_compra);
     }, 0);
 
     const codigoDe = (p) => p.codigo_barras || generarCodigoEAN13(p.id_producto);
@@ -69,11 +134,28 @@ export default function Inventario() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
                 <StatsCards title={"Total Productos"} icon={<Box className="text-title" />} value={productos.length} />
                 <StatsCards title={"Valor Inventario"} icon={<TrendingUp className="text-title" />} value={`C$${valorTotalInventario.toFixed(2)}`} /> {/* Añadido toFixed(2) */}
-                <StatsCards title={"Stock Bajo"} icon={<CircleAlert color="red" />} value={productos.filter(p => p.stock <= p.stock_minimo).length} />
+                <StatsCards title={"Stock Bajo"} icon={<CircleAlert color="red" />} value={productos.filter(p => stockDe(p) <= stockMinDe(p)).length} />
                 <StatsCards title={"Movimientos hoy"} icon={<TrendingDown className="text-title" />} value={"0"} />
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+                <span className="text-subtitle text-sm flex items-center gap-1.5"><Building2 size={16} /> Sucursal:</span>
+                {esSuperadmin ? (
+                    <select
+                        value={sucursalSel}
+                        onChange={(e) => setSucursalSel(e.target.value)}
+                        className="bg-input text-title border border-secondary rounded-lg px-3 py-1.5 text-sm"
+                    >
+                        <option value="">Todas (stock global)</option>
+                        {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                    </select>
+                ) : (
+                    <span className="badge badge-info">{sucursales.find((s) => String(s.id) === sucursalSel)?.nombre || "Mi sucursal"}</span>
+                )}
+                {verPorSucursal && <span className="text-xs text-subtitle">Mostrando stock de la sucursal seleccionada.</span>}
+            </div>
+
+            <div className="mt-4">
                 <Tabs tabs={tabs} activeKey={activeTab} onChange={setActiveTab} />
                 <div className="mt-8 border border-secondary rounded-2xl p-5">
                     {activeTab === "productos" && (
@@ -144,7 +226,7 @@ export default function Inventario() {
                                                             <td className="py-4 px-4 font-medium text-center text-title">
                                                                 <div className="flex flex-col items-center gap-1">
                                                                     <span>{p.nombre}</span>
-                                                                    {p.stock <= p.stock_minimo && (
+                                                                    {stockDe(p) <= stockMinDe(p) && (
                                                                         <span className="inline-flex items-center gap-1 bg-red-600/20 text-red-400 text-[10px] font-semibold px-2 py-0.5 rounded-full">
                                                                             <CircleAlert size={11} /> Stock bajo
                                                                         </span>
@@ -155,11 +237,11 @@ export default function Inventario() {
                                                             <td className="py-4 px-4 text-center text-subtitle">C${p.precio_compra.toFixed(2)}</td>
                                                             <td className="py-4 px-4 text-center text-subtitle">C${p.precio_venta.toFixed(2)}</td>
                                                             <td className="py-4 px-4 text-center">
-                                                                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${p.stock > p.stock_minimo
+                                                                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${stockDe(p) > stockMinDe(p)
                                                                     ? 'bg-green-600/20 text-green-400'
                                                                     : 'bg-red-600/20 text-red-400'
                                                                     }`}>
-                                                                    {p.stock}
+                                                                    {stockDe(p)}
                                                                 </span>
                                                             </td>
                                                             <td className="py-4 px-4 text-center text-subtitle">{p.unidades_medidas?.nombre || "N/A"}</td>
@@ -167,7 +249,12 @@ export default function Inventario() {
                                                             <td className="py-4 px-4 text-center text-subtitle">{new Date(p.fecha_registro).toLocaleDateString()}</td>
                                                             <td className="py-4 px-4 text-center text-subtitle">{p.fecha_vencimiento ? new Date(p.fecha_vencimiento).toLocaleDateString() : "N/A"}</td>
                                                             <td className="py-4 px-4">
-                                                                <div className="flex justify-center gap-8">
+                                                                <div className="flex justify-center gap-6">
+                                                                    {verPorSucursal && (
+                                                                        <button title="Ajustar stock físico de la sucursal" onClick={() => ajustarStock(p)} className="text-amber-400 hover:text-amber-300 transition-colors transform hover:scale-110 cursor-pointer">
+                                                                            <SlidersHorizontal size={18} />
+                                                                        </button>
+                                                                    )}
                                                                     <button title="Editar Producto" onClick={() => setProductoEditando(p)} className="text-blue-400 hover:text-blue-300 transition-colors transform hover:scale-110 cursor-pointer">
                                                                         <Pencil size={18} />
                                                                     </button>

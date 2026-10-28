@@ -24,9 +24,12 @@ export default function AperturaCierre() {
   const [ventasPeriodo, setVentasPeriodo] = useState(0);
   const [historial, setHistorial] = useState([]);
   const [resumenCajas, setResumenCajas] = useState([]);
+  const [misAsignaciones, setMisAsignaciones] = useState([]); // cajas asignadas al cajero logueado
 
   // Los supervisores ven un resumen de las cajas del día de su sucursal.
   const esSupervisor = ["admin", "gerente", "superadmin"].includes(rol);
+  // El cajero/vendedor solo puede abrir cajas que le hayan sido asignadas.
+  const requiereAsignacion = !esSupervisor;
 
   // Modales
   const [modalAbrir, setModalAbrir] = useState(false);
@@ -39,13 +42,13 @@ export default function AperturaCierre() {
   const [cerrando, setCerrando] = useState(false);
   const [formCerrar, setFormCerrar] = useState({ contado_efectivo: "", monto_tarjeta: "", monto_transferencia: "", observaciones: "" });
 
-  const calcularVentasPeriodo = useCallback(async (desde) => {
-    // Suma de ventas en efectivo desde la apertura de caja
+  const calcularVentasPeriodo = useCallback(async (idApertura) => {
+    // Suma de ventas registradas en esta apertura de caja (no todas las de la empresa)
     const { data, error } = await supabase
       .from("ventas")
-      .select("monto_total, fecha_venta, tipo_pago, created_at")
+      .select("monto_total")
       .eq("id_empresa", EMPRESA_ID)
-      .gte("fecha_venta", format(new Date(desde), "yyyy-MM-dd"));
+      .eq("id_apertura_caja", idApertura);
     if (error) {
       console.error("Error calculando ventas:", error.message);
       return 0;
@@ -69,16 +72,24 @@ export default function AperturaCierre() {
     setCajaActual(caja || null);
 
     if (caja) {
-      const v = await calcularVentasPeriodo(caja.fecha_apertura);
+      const v = await calcularVentasPeriodo(caja.id);
       setVentasPeriodo(v);
     } else {
       setVentasPeriodo(0);
     }
 
-    // Catálogos para abrir
+    // Catálogos para abrir. Las terminales y sucursales se limitan a la sucursal
+    // del perfil para roles no superadmin; el superadmin ve todas.
+    const esSuper = rol === "superadmin";
+    let termQuery = supabase.from("terminales_pos").select("id, nombre, id_sucursal").eq("id_empresa", EMPRESA_ID).eq("estado", true);
+    let sucQuery = supabase.from("sucursales").select("id, nombre").eq("id_empresa", EMPRESA_ID).eq("estado", true);
+    if (!esSuper && perfil?.id_sucursal) {
+      termQuery = termQuery.eq("id_sucursal", perfil.id_sucursal);
+      sucQuery = sucQuery.eq("id", perfil.id_sucursal);
+    }
     const [{ data: term }, { data: suc }, { data: hist }] = await Promise.all([
-      supabase.from("terminales_pos").select("id, nombre").eq("id_empresa", EMPRESA_ID).eq("estado", true),
-      supabase.from("sucursales").select("id, nombre").eq("id_empresa", EMPRESA_ID).eq("estado", true),
+      termQuery,
+      sucQuery,
       supabase
         .from("apertura_caja")
         .select("*, terminal:terminales_pos(nombre), sucursal:sucursales(nombre)")
@@ -89,6 +100,18 @@ export default function AperturaCierre() {
     setTerminales(term || []);
     setSucursales(suc || []);
     setHistorial(hist || []);
+
+    // Cajas asignadas al cajero/vendedor logueado (para limitar qué terminal puede abrir)
+    if (requiereAsignacion) {
+      const { data: asigs } = await supabase
+        .from("asignaciones_caja")
+        .select("id_terminal, turno")
+        .eq("id_cajero", user.id)
+        .eq("activo", true);
+      setMisAsignaciones(asigs || []);
+    } else {
+      setMisAsignaciones([]);
+    }
 
     // Resumen de cajas del día para supervisores (admin/gerente/superadmin)
     if (esSupervisor) {
@@ -126,6 +149,23 @@ export default function AperturaCierre() {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  // Para roles no superadmin la sucursal queda fijada a la del perfil.
+  useEffect(() => {
+    if (rol !== "superadmin" && perfil?.id_sucursal) {
+      setFormAbrir((f) => ({ ...f, id_sucursal: String(perfil.id_sucursal) }));
+    }
+  }, [rol, perfil, modalAbrir]);
+
+  // Terminales disponibles según la sucursal seleccionada en el modal.
+  const idsAsignados = misAsignaciones.map((a) => a.id_terminal);
+  const terminalesModal = (formAbrir.id_sucursal
+    ? terminales.filter((t) => String(t.id_sucursal) === String(formAbrir.id_sucursal))
+    : terminales
+  ).filter((t) => (requiereAsignacion ? idsAsignados.includes(t.id) : true));
+
+  // El cajero/vendedor sin ninguna caja asignada no puede abrir turno.
+  const sinCajaAsignada = requiereAsignacion && idsAsignados.length === 0;
 
   const abrirCaja = async (e) => {
     e.preventDefault();
@@ -228,12 +268,34 @@ export default function AperturaCierre() {
             <button onClick={abrirModalCerrar} className="bg-red-600 text-white flex flex-row h-10 gap-3 p-2 rounded-xl items-center cursor-pointer hover:scale-110 transition">
               <DoorClosed /> Cerrar Caja
             </button>
+          ) : sinCajaAsignada ? (
+            <button disabled title="No tenés una caja asignada" className="bg-secondary text-subtitle flex flex-row h-10 gap-3 p-2 rounded-xl items-center cursor-not-allowed border border-secondary opacity-70">
+              <DoorOpen /> Abrir Caja
+            </button>
           ) : (
             <button onClick={() => setModalAbrir(true)} className="bg-button text-button flex flex-row h-10 gap-3 p-2 rounded-xl items-center cursor-pointer hover:scale-110 transition">
               <DoorOpen /> Abrir Caja
             </button>
           )}
         </div>
+
+        {/* Aviso: cajero sin caja asignada */}
+        {!isLoading && !cajaActual && sinCajaAsignada && (
+          <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-amber-300 text-sm flex items-start gap-2">
+            <Clock size={18} className="mt-0.5 shrink-0" />
+            <span>No tenés una caja asignada. Pedile a tu gerente que te asigne una (POS) antes de abrir turno.</span>
+          </div>
+        )}
+
+        {/* Info: cajas asignadas al cajero */}
+        {!isLoading && !cajaActual && requiereAsignacion && misAsignaciones.length > 0 && (
+          <div className="mt-4 rounded-xl border border-secondary bg-secondary/40 p-4 text-sm text-title">
+            <p className="text-subtitle mb-1 flex items-center gap-2"><Wallet size={16} /> Caja asignada</p>
+            <p className="font-semibold">
+              {terminales.filter((t) => misAsignaciones.some((a) => a.id_terminal === t.id)).map((t) => t.nombre).join(", ") || "—"}
+            </p>
+          </div>
+        )}
 
         {cajaActual && (
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-title">
@@ -367,15 +429,21 @@ export default function AperturaCierre() {
                 <label className="text-sm font-medium">Terminal *</label>
                 <select value={formAbrir.id_terminal} onChange={(e) => setFormAbrir({ ...formAbrir, id_terminal: e.target.value })} className="bg-input border border-secondary rounded-lg p-3">
                   <option value="">Seleccione una terminal</option>
-                  {terminales.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                  {terminalesModal.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium">Sucursal *</label>
-                <select value={formAbrir.id_sucursal} onChange={(e) => setFormAbrir({ ...formAbrir, id_sucursal: e.target.value })} className="bg-input border border-secondary rounded-lg p-3">
+                <select
+                  value={formAbrir.id_sucursal}
+                  onChange={(e) => setFormAbrir({ ...formAbrir, id_sucursal: e.target.value, id_terminal: "" })}
+                  disabled={rol !== "superadmin"}
+                  className="bg-input border border-secondary rounded-lg p-3 disabled:opacity-60"
+                >
                   <option value="">Seleccione una sucursal</option>
                   {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
+                {rol !== "superadmin" && <span className="text-xs text-subtitle">Tu sucursal está asignada automáticamente.</span>}
               </div>
               <div className="flex justify-end gap-4 mt-4">
                 <button type="button" onClick={() => setModalAbrir(false)} className="cursor-pointer bg-secondary border border-secondary font-semibold py-2 px-6 rounded-lg hover:scale-105 transition">Cancelar</button>

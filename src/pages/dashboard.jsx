@@ -3,7 +3,7 @@ import {
     Users, Wallet, Wrench, FileSpreadsheetIcon, ChartColumn, TrendingUp,
     Sun, Moon, Lightbulb, Menu, X, ShoppingBag, Printer,
     Building2, Monitor, DoorOpen, RotateCcw, ScrollText, ArrowLeftRight,
-    Megaphone, BarChart3, Settings,
+    Megaphone, BarChart3, Settings, LifeBuoy, Globe,
     ListTree, BookText, BookOpen, Clock, Scale, CalendarClock, SlidersHorizontal
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -22,28 +22,29 @@ const navGroups = [
         section: "Ventas y Atención",
         links: [
             { to: "ventas",         label: 'Ventas',               icon: ShoppingCart, roles: ["admin", "vendedor", "gerente", "cajero"] },
-            { to: "pedidosWeb",     label: 'Pedidos Web',           icon: ShoppingBag,  roles: ["admin", "vendedor", "despacho"] },
-            { to: "impresiones",    label: 'Impresiones',           icon: Printer,      roles: ["admin", "vendedor", "cajero", "despacho"] },
-            { to: "clientes",       label: 'Clientes',              icon: UserCheck,    roles: ["admin", "vendedor"] },
-            { to: "devoluciones",   label: 'Devoluciones',          icon: RotateCcw,    roles: ["admin", "vendedor", "cajero"] },
+            { to: "pedidosWeb",     label: 'Pedidos Web',           icon: ShoppingBag,  roles: ["admin", "vendedor", "gerente", "despacho"] },
+            { to: "impresiones",    label: 'Impresiones',           icon: Printer,      roles: ["admin", "vendedor", "gerente"] },
+            { to: "clientes",       label: 'Clientes',              icon: UserCheck,    roles: ["admin", "vendedor", "gerente"] },
+            { to: "devoluciones",   label: 'Devoluciones',          icon: RotateCcw,    roles: ["admin", "vendedor", "gerente"] },
             { to: "aperturaCierre", label: 'Apertura/Cierre Caja',  icon: DoorOpen,     roles: ["cajero", "admin", "gerente"] },
+            { to: "asignacionCajas", label: 'Asignación de Cajas',  icon: Monitor,      roles: ["admin", "gerente"] },
         ],
     },
     {
         section: "Inventario",
         links: [
-            { to: "inventario",     label: 'Inventario',     icon: Package,        roles: ["admin", "vendedor"] },
-            { to: "proveedores",    label: 'Proveedores',    icon: Users,          roles: ["admin", "vendedor"] },
-            { to: "transferencias", label: 'Transferencias', icon: ArrowLeftRight, roles: ["admin", "vendedor"] },
-            { to: "sucursales",     label: 'Sucursales',     icon: Building2,      roles: ["admin", "vendedor"] },
+            { to: "inventario",     label: 'Inventario',     icon: Package,        roles: ["admin", "vendedor", "gerente"] },
+            { to: "proveedores",    label: 'Proveedores',    icon: Users,          roles: ["admin", "vendedor", "gerente"] },
+            { to: "transferencias", label: 'Transferencias', icon: ArrowLeftRight, roles: ["admin", "vendedor", "gerente"] },
+            { to: "sucursales",     label: 'Sucursales',     icon: Building2,      roles: [] }, // solo superadmin (no se crean sucursales desde admin)
         ],
     },
     {
         section: "Finanzas",
         links: [
-            { to: "cajabancos",         label: 'Cajas/Bancos',       icon: Wallet,              roles: ["admin", "vendedor"] },
-            { to: "activosFijos",       label: 'Activos Fijos',      icon: Wrench,              roles: ["admin", "vendedor"] },
-            { to: "gastosFijos",        label: 'Gastos Fijos',       icon: Lightbulb,           roles: ["admin", "vendedor"] },
+            { to: "cajabancos",         label: 'Cajas/Bancos',       icon: Wallet,              roles: ["admin", "vendedor", "gerente"] },
+            { to: "activosFijos",       label: 'Activos Fijos',      icon: Wrench,              roles: ["admin", "vendedor", "gerente"] },
+            { to: "gastosFijos",        label: 'Gastos Fijos',       icon: Lightbulb,           roles: ["admin", "vendedor", "gerente"] },
             { to: "estadosFinancieros", label: 'Estados Financieros', icon: FileSpreadsheetIcon, roles: ["admin", "vendedor", "gerente"] },
             { to: "analisis",           label: 'Análisis',           icon: ChartColumn,         roles: ["admin", "vendedor", "gerente"] },
             { to: "proyecciones",       label: 'Proyecciones',       icon: TrendingUp,          roles: ["admin", "vendedor", "gerente"] },
@@ -82,9 +83,16 @@ const navGroups = [
     {
         section: "Sistema",
         links: [
-            { to: "terminalesPOS", label: 'Terminales POS',      icon: Monitor,    roles: [] }, // solo superadmin
-            { to: "usuarios",      label: 'Usuarios y Permisos', icon: Users,      roles: [] }, // solo superadmin
-            { to: "auditoria",     label: 'Auditoría',           icon: ScrollText, roles: [] }, // solo superadmin
+            { to: "vistaSucursales", label: 'Vista de Sucursales', icon: Globe,      roles: [] }, // solo superadmin
+            { to: "terminalesPOS",   label: 'Terminales POS',      icon: Monitor,    roles: [] }, // solo superadmin
+            { to: "usuarios",        label: 'Usuarios y Permisos', icon: Users,      roles: [] }, // solo superadmin
+            { to: "auditoria",       label: 'Auditoría',           icon: ScrollText, roles: [] }, // solo superadmin
+        ],
+    },
+    {
+        section: "Soporte",
+        links: [
+            { to: "ticketsIT", label: 'Tickets IT', icon: LifeBuoy, roles: ["admin", "vendedor", "gerente", "cajero", "despacho"] },
         ],
     },
     {

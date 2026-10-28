@@ -45,6 +45,7 @@ export default function EstadosFinancieros() {
     const [datosBalanza, setDatosBalanza] = useState([]);
     const [validacion, setValidacion] = useState(null);
     const [configFiscal, setConfigFiscal] = useState(null);
+    const [rangoDatos, setRangoDatos] = useState(null);
 
     useEffect(() => {
         const validar = async () => {
@@ -64,13 +65,21 @@ export default function EstadosFinancieros() {
                     porTipo[t] = (porTipo[t] || 0) + Number(f.saldo_final || 0);
                 });
                 const totalActivo = porTipo['activo'] || 0;
-                const totalPasivoPatrimonio = (porTipo['pasivo'] || 0) + (porTipo['patrimonio'] || 0);
+                const utilidadPeriodo = Math.abs(porTipo['ingreso'] || 0) - Math.abs(porTipo['costo'] || 0) - Math.abs(porTipo['gasto'] || 0);
+                const totalPasivoPatrimonio = Math.abs(porTipo['pasivo'] || 0) + Math.abs(porTipo['patrimonio'] || 0) + utilidadPeriodo;
+                const { data: rango } = await supabase
+                    .from('comprobantes')
+                    .select('fecha_contable')
+                    .order('fecha_contable', { ascending: true });
+                const fechas = (rango || []).map((r) => r.fecha_contable).filter(Boolean);
+                setRangoDatos(fechas.length ? { min: fechas[0], max: fechas[fechas.length - 1] } : null);
                 setValidacion({
                     totalDebe,
                     totalHaber,
                     balanceaDebeHaber: Math.abs(totalDebe - totalHaber) < 0.01,
                     totalActivo,
                     totalPasivoPatrimonio,
+                    utilidadPeriodo,
                     balanceaEcuacion: Math.abs(Math.abs(totalActivo) - Math.abs(totalPasivoPatrimonio)) < 0.01,
                 });
             } catch (err) {
@@ -134,14 +143,14 @@ export default function EstadosFinancieros() {
                 p_fecha_corte: fechaInicioReporte
             });
             if (errorAnterior) throw errorAnterior;
-            setCuentasAnteriores(dataAnterior || []);
+            setCuentasAnteriores((dataAnterior || []).map(c => ({ ...c, saldo: Number(c.saldo) || 0 })));
 
             const { data: dataActual, error: errorActual } = await supabase.rpc('sp_get_balance_as_of_date', {
                 p_id_empresa: empresaId,
                 p_fecha_corte: fechaCierre
             });
             if (errorActual) throw errorActual;
-            setCuentasActuales(dataActual || []);
+            setCuentasActuales((dataActual || []).map(c => ({ ...c, saldo: Number(c.saldo) || 0 })));
 
             const { data: dataBalanza, error: errorBalanza } = await supabase.rpc('sp_get_balanza_comprobacion', {
                 p_id_empresa: empresaId,
@@ -360,7 +369,7 @@ export default function EstadosFinancieros() {
                         </p>
                         {validacion && (
                             <p className="text-subtitle text-xs mt-1">
-                                Activo: C$ {Math.abs(validacion.totalActivo).toFixed(2)} · Pasivo+Patrimonio: C$ {Math.abs(validacion.totalPasivoPatrimonio).toFixed(2)}
+                                Activo: C$ {Math.abs(validacion.totalActivo).toFixed(2)} · Pasivo+Patrimonio+Utilidad: C$ {Math.abs(validacion.totalPasivoPatrimonio).toFixed(2)} (utilidad del período: C$ {Number(validacion.utilidadPeriodo || 0).toFixed(2)})
                             </p>
                         )}
                     </div>
@@ -373,6 +382,13 @@ export default function EstadosFinancieros() {
                                 : "⚠ IR pendiente de configurar"}
                         </p>
                     </div>
+                </div>
+            )}
+
+            {!isLoading && cuentasActuales.length > 0 && cuentasActuales.every(c => Math.abs(Number(c.saldo) || 0) < 0.005) && (
+                <div className="mb-4 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
+                    ⚠ No hay movimientos contables hasta la fecha de cierre seleccionada ({fechaCierre}).
+                    {rangoDatos && ` Los asientos registrados van del ${rangoDatos.min} al ${rangoDatos.max}. Ajuste el período y presione Generar.`}
                 </div>
             )}
 

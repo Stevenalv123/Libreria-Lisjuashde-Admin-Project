@@ -68,8 +68,10 @@ export default function Ventas() {
     // Sólo el rol "cajero" está obligado a tener la caja abierta para registrar ventas.
     // Los demás roles (superadmin, admin, gerente, despacho) pueden vender siempre.
     const esCajero = rol === "cajero";
+    const esSupervisor = ["superadmin", "admin", "gerente"].includes(rol);
     // null = aún verificando; true/false = resultado
     const [cajaAbierta, setCajaAbierta] = useState(esCajero ? null : true);
+    const [miAperturaId, setMiAperturaId] = useState(null);
 
     useEffect(() => {
         let activo = true;
@@ -93,7 +95,9 @@ export default function Ventas() {
                 setCajaAbierta(false);
                 return;
             }
-            setCajaAbierta(Array.isArray(data) && data.length > 0);
+            const tiene = Array.isArray(data) && data.length > 0;
+            setCajaAbierta(tiene);
+            setMiAperturaId(tiene ? data[0].id : null);
         };
         verificarCaja();
         return () => { activo = false; };
@@ -102,19 +106,29 @@ export default function Ventas() {
     // El botón de venta se bloquea sólo cuando es cajero y ya se verificó que NO tiene caja abierta.
     const ventaBloqueada = esCajero && cajaAbierta === false;
 
-    const totalVentas = ventas
-        ? ventas.reduce((acc, v) => acc + Number(v.monto_total), 0)
-        : 0;
+    // --- Alcance de ventas por rol (RF-13) ---
+    // El cajero sólo ve SUS ventas del turno actual (caja abierta) o del día de hoy.
+    // Los supervisores ven todas las ventas que su RLS les permita (su sucursal / todas).
+    const hoyStr = new Date().toISOString().slice(0, 10);
+    const ventasVisibles = (ventas || []).filter((v) => {
+        if (!esCajero) return true;
+        if (v.usuario_registra && user?.id && v.usuario_registra !== user.id) return false;
+        if (miAperturaId) return v.id_apertura_caja === miAperturaId;
+        // Sin caja abierta: mostrar sólo las de hoy
+        return (v.fecha_venta || "").slice(0, 10) === hoyStr;
+    });
 
-    const facturasEmitidas = ventas ? ventas.length : 0;
+    const totalVentas = ventasVisibles.reduce((acc, v) => acc + Number(v.monto_total), 0);
 
-    const porCobrar = ventas
-        ? ventas.filter(v => v.estado === 'Pendiente').reduce((acc, v) => acc + Number(v.monto_total), 0)
-        : 0;
+    const facturasEmitidas = ventasVisibles.length;
 
-    const ventasFiltradas = ventas
-        ? (filtroContable ? ventas.filter(v => (v.estado_contable || "PENDIENTE") === filtroContable) : ventas)
-        : [];
+    const porCobrar = ventasVisibles
+        .filter(v => v.estado === 'Pendiente')
+        .reduce((acc, v) => acc + Number(v.monto_total), 0);
+
+    const ventasFiltradas = filtroContable
+        ? ventasVisibles.filter(v => (v.estado_contable || "PENDIENTE") === filtroContable)
+        : ventasVisibles;
 
     const formatCurrency = (amount) => `C$${Number(amount || 0).toFixed(2)}`;
 
@@ -209,8 +223,8 @@ export default function Ventas() {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-                <StatsCards title={"Total Ventas"} icon={<DollarSign className="text-title" />} value={formatCurrency(totalVentas)} />
-                <StatsCards title={"Facturas Emitidas"} icon={<FileSpreadsheet className="text-title" />} value={facturasEmitidas} />
+                <StatsCards title={esCajero ? "Ventas de mi turno" : "Total Ventas"} icon={<DollarSign className="text-title" />} value={formatCurrency(totalVentas)} />
+                <StatsCards title={esCajero ? "Mis facturas" : "Facturas Emitidas"} icon={<FileSpreadsheet className="text-title" />} value={facturasEmitidas} />
                 <StatsCards title={"Por Cobrar"} icon={<AlertTriangle className="text-title" />} value={formatCurrency(porCobrar)} />
                 <StatsCards title={"Borradores"} value={"0"} />
             </div>
@@ -259,6 +273,8 @@ export default function Ventas() {
                                     <th className="p-4 text-center text-title font-semibold text-sm">Fecha</th>
                                     <th className="p-4 text-center text-title font-semibold text-sm">Plazo de Dias</th>
                                     <th className="p-4 text-center text-title font-semibold text-sm">Total</th>
+                                    {esSupervisor && <th className="p-4 text-center text-title font-semibold text-sm">Sucursal</th>}
+                                    {esSupervisor && <th className="p-4 text-center text-title font-semibold text-sm">Canal</th>}
                                     <th className="p-4 text-center text-title font-semibold text-sm">Estado</th>
                                     <th className="p-4 text-center text-title font-semibold text-sm">Estado contable</th>
                                     <th className="p-4 text-center text-title font-semibold text-sm">Acciones</th>
@@ -267,7 +283,7 @@ export default function Ventas() {
                             <tbody>
                                 {isLoadingVentas && (
                                     <tr>
-                                        <td colSpan="8" className="p-4 text-center text-subtitle">
+                                        <td colSpan={esSupervisor ? 10 : 8} className="p-4 text-center text-subtitle">
                                             Cargando ventas...
                                         </td>
                                     </tr>
@@ -275,7 +291,7 @@ export default function Ventas() {
 
                                 {!isLoadingVentas && ventasFiltradas.length === 0 && (
                                     <tr>
-                                        <td colSpan="8" className="p-4 text-center text-subtitle">
+                                        <td colSpan={esSupervisor ? 10 : 8} className="p-4 text-center text-subtitle">
                                             No hay ventas registradas. Comienza creando una nueva.
                                         </td>
                                     </tr>
@@ -288,6 +304,14 @@ export default function Ventas() {
                                         <td className="p-4 text-center text-subtitle">{new Date(venta.fecha_venta).toLocaleDateString('es-NI', { timeZone: 'UTC' })}</td>
                                         <td className="p-4 text-center text-subtitle">{venta.plazo_dias ? `${venta.plazo_dias} días` : "N/A"}</td>
                                         <td className="p-4 text-center text-title">{formatCurrency(venta.monto_total)}</td>
+                                        {esSupervisor && <td className="p-4 text-center text-subtitle">{venta.sucursal?.nombre || "—"}</td>}
+                                        {esSupervisor && (
+                                            <td className="p-4 text-center">
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${venta.canal === "web" ? "bg-purple-500/15 text-purple-300" : "bg-slate-500/15 text-slate-300"}`}>
+                                                    {venta.canal === "web" ? "Web" : "Sucursal"}
+                                                </span>
+                                            </td>
+                                        )}
                                         <td className="p-4 text-center">{getStatusBadge(venta.estado)}</td>
                                         <td className="p-4 text-center">
                                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${ESTADO_CONTABLE_BADGE[venta.estado_contable || "PENDIENTE"] || "bg-slate-500/20 text-slate-300"}`}>
