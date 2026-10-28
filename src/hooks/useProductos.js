@@ -87,27 +87,26 @@ export function useProductos() {
         }
 
         try {
-            const { data: cuentas, error: errorCuentas } = await supabase
-                .from('cuentas_empresa')
-                .select('id_cuenta, nombre')
-                .eq('id_empresa', empresaId)
-                .in('nombre', ['Inventario', 'Proveedores', 'Caja']); // Nombres estándar
+            // Resolver cuentas contables mediante las reglas por defecto (config_cuentas_defecto),
+            // en lugar de buscar por nombre de texto (que es frágil).
+            const [inv, cxp, caja] = await Promise.all([
+                supabase.rpc('fn_cuenta_defecto', { p_modulo: 'COMPRAS', p_regla: 'INVENTARIO' }),
+                supabase.rpc('fn_cuenta_defecto', { p_modulo: 'COMPRAS', p_regla: 'CXP' }),
+                supabase.rpc('fn_cuenta_defecto', { p_modulo: 'CAJA', p_regla: 'EFECTIVO' }),
+            ]);
 
-            if (errorCuentas) throw errorCuentas;
-
-            // Mapeamos los resultados a variables
-            const cuentaInventario = cuentas.find(c => c.nombre === 'Inventario');
-            const cuentaProveedores = cuentas.find(c => c.nombre === 'Proveedores');
-            const cuentaCaja = cuentas.find(c => c.nombre === 'Caja');
-
-            // Validamos que existan (por si acaso se borraron o cambiaron de nombre)
-            if (!cuentaInventario || !cuentaProveedores || !cuentaCaja) {
-                throw new Error("No se encontraron las cuentas contables base (Inventario, Proveedores o Caja) para registrar el movimiento.");
+            if (inv.error || cxp.error || caja.error) {
+                throw new Error("No se pudieron resolver las cuentas contables por defecto.");
             }
 
-            const ID_CUENTA_INVENTARIO = cuentaInventario.id_cuenta;
-            const ID_CUENTA_PROVEEDORES = cuentaProveedores.id_cuenta;
-            const ID_CUENTA_CAJA = cuentaCaja.id_cuenta;
+            const ID_CUENTA_INVENTARIO = inv.data;
+            const ID_CUENTA_PROVEEDORES = cxp.data;
+            const ID_CUENTA_CAJA = caja.data;
+
+            // Validamos que las reglas existan (configurables en Finanzas › Cuentas por defecto)
+            if (!ID_CUENTA_INVENTARIO || !ID_CUENTA_PROVEEDORES || !ID_CUENTA_CAJA) {
+                throw new Error("Faltan cuentas por defecto (Inventario, Proveedores/CxP o Caja). Configúrelas en Contabilidad › Cuentas por defecto.");
+            }
             // --- 1. Definir el objeto a insertar ---
             const productoParaInsertar = {
                 ...nuevoProducto, // Esto viene del formulario

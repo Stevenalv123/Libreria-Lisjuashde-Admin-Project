@@ -22,12 +22,24 @@ import Proyecciones from '../pages/proyecciones';
 import Sucursales from '../pages/sucursales';
 import TerminalesPOS from '../pages/terminalesPOS';
 import AperturaCierre from '../pages/aperturaCierre';
+import AsignacionCajas from '../pages/asignacionCajas';
 import Devoluciones from '../pages/devoluciones';
 import Usuarios from '../pages/usuarios';
 import Auditoria from '../pages/auditoria';
 import Transferencias from '../pages/transferencias';
+import Configuracion from '../pages/configuracion';
 import Login from '../pages/login';
 import ProtectedRoute from './protectedroute';
+import RoleRoute from './RoleRoute';
+import TicketsIT from '../pages/ticketsIT';
+import VistaSucursales from '../pages/vistaSucursales';
+import PlanCuentas from '../pages/planCuentas';
+import ConfigContable from '../pages/configContable';
+import PeriodosContables from '../pages/periodosContables';
+import LibroMayor from '../pages/libroMayor';
+import Comprobantes from '../pages/comprobantes';
+import AntiguedadSaldos from '../pages/antiguedadSaldos';
+import ConciliacionBancaria from '../pages/conciliacionBancaria';
 
 const router = createBrowserRouter([
   {
@@ -48,31 +60,48 @@ const router = createBrowserRouter([
             path: 'dashboard', // El layout principal
             element: <Dashboard />,
             children: [
-              // Las páginas que se renderizan dentro del <Outlet> de Dashboard
-              { path: 'empresas', element: <Empresas /> },
-              { path: 'ventas', element: <Ventas /> },
-              { path: 'pedidosWeb', element: <PedidosWeb /> },
-              { path: 'impresiones', element: <Impresiones /> },
-              { path: 'clientes', element: <Clientes /> },
-              { path: 'inventario', element: <Inventario /> },
-              { path: 'proveedores', element: <Proveedores /> },
-              { path: 'cajabancos', element: <CajasBancos /> },
-              { path: 'activosFijos', element: <ActivosFijos /> },
-              { path: 'gastosFijos', element: <GastosFijos /> },
-              { path: 'personal', element: <Personal /> },
-              { path: 'recursosHumanos', element: <RecursosHumanos /> },
-              { path: 'marketing', element: <Marketing /> },
-              { path: 'estadosFinancieros', element: <EstadosFinancieros /> },
-              { path: 'analisis', element: <AnalisisFinanciero /> },
-              { path: 'reportes', element: <Reportes /> },
-              { path: 'proyecciones', element: <Proyecciones /> },
-              { path: 'sucursales', element: <Sucursales /> },
-              { path: 'terminalesPOS', element: <TerminalesPOS /> },
-              { path: 'aperturaCierre', element: <AperturaCierre /> },
-              { path: 'devoluciones', element: <Devoluciones /> },
-              { path: 'usuarios', element: <Usuarios /> },
-              { path: 'auditoria', element: <Auditoria /> },
-              { path: 'transferencias', element: <Transferencias /> },
+              // Guardia por rol: envuelve todas las páginas internas.
+              {
+                element: <RoleRoute />,
+                children: [
+                  // Las páginas que se renderizan dentro del <Outlet> de Dashboard
+                  { path: 'empresas', element: <Empresas /> },
+                  { path: 'ventas', element: <Ventas /> },
+                  { path: 'pedidosWeb', element: <PedidosWeb /> },
+                  { path: 'impresiones', element: <Impresiones /> },
+                  { path: 'clientes', element: <Clientes /> },
+                  { path: 'inventario', element: <Inventario /> },
+                  { path: 'proveedores', element: <Proveedores /> },
+                  { path: 'cajabancos', element: <CajasBancos /> },
+                  { path: 'activosFijos', element: <ActivosFijos /> },
+                  { path: 'gastosFijos', element: <GastosFijos /> },
+                  { path: 'personal', element: <Personal /> },
+                  { path: 'recursosHumanos', element: <RecursosHumanos /> },
+                  { path: 'marketing', element: <Marketing /> },
+                  { path: 'estadosFinancieros', element: <EstadosFinancieros /> },
+                  { path: 'analisis', element: <AnalisisFinanciero /> },
+                  { path: 'reportes', element: <Reportes /> },
+                  { path: 'proyecciones', element: <Proyecciones /> },
+                  { path: 'sucursales', element: <Sucursales /> },
+                  { path: 'terminalesPOS', element: <TerminalesPOS /> },
+                  { path: 'aperturaCierre', element: <AperturaCierre /> },
+                  { path: 'asignacionCajas', element: <AsignacionCajas /> },
+                  { path: 'devoluciones', element: <Devoluciones /> },
+                  { path: 'usuarios', element: <Usuarios /> },
+                  { path: 'auditoria', element: <Auditoria /> },
+                  { path: 'transferencias', element: <Transferencias /> },
+                  { path: 'configuracion', element: <Configuracion /> },
+                  { path: 'ticketsIT', element: <TicketsIT /> },
+                  { path: 'vistaSucursales', element: <VistaSucursales /> },
+                  { path: 'planCuentas', element: <PlanCuentas /> },
+                  { path: 'configContable', element: <ConfigContable /> },
+                  { path: 'periodosContables', element: <PeriodosContables /> },
+                  { path: 'libroMayor', element: <LibroMayor /> },
+                  { path: 'comprobantes', element: <Comprobantes /> },
+                  { path: 'antiguedadSaldos', element: <AntiguedadSaldos /> },
+                  { path: 'conciliacionBancaria', element: <ConciliacionBancaria /> },
+                ]
+              },
               // Si estás en '/dashboard', redirige a 'ventas'
               { index: true, element: <Navigate to="ventas" replace /> }
             ]

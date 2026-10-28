@@ -20,7 +20,7 @@ export function useClientes() {
             try {
                 const { data, error } = await supabase
                     .from("clientes")
-                    .select("id_cliente, nombre, identificacion, correo, telefono, direccion, limite_credito")
+                    .select("id_cliente, nombre, identificacion, correo, telefono, direccion, limite_credito, tipo_cliente")
                     .eq('id_empresa', empresaId);
 
                 if (error) throw error;

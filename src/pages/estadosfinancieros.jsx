@@ -43,6 +43,62 @@ export default function EstadosFinancieros() {
     const [isProcessing, setIsProcessing] = useState(false);
     const { empresaId } = useEmpresa();
     const [datosBalanza, setDatosBalanza] = useState([]);
+    const [validacion, setValidacion] = useState(null);
+    const [configFiscal, setConfigFiscal] = useState(null);
+    const [rangoDatos, setRangoDatos] = useState(null);
+
+    useEffect(() => {
+        const validar = async () => {
+            if (!empresaId) return;
+            try {
+                const { data, error } = await supabase.rpc('fn_balanza_comprobacion', {
+                    p_desde: '1900-01-01',
+                    p_hasta: getTodayString(),
+                });
+                if (error) throw error;
+                const filas = data || [];
+                const totalDebe = filas.reduce((s, f) => s + Number(f.debe || 0), 0);
+                const totalHaber = filas.reduce((s, f) => s + Number(f.haber || 0), 0);
+                const porTipo = {};
+                filas.forEach((f) => {
+                    const t = (f.tipo_raiz || '').toLowerCase();
+                    porTipo[t] = (porTipo[t] || 0) + Number(f.saldo_final || 0);
+                });
+                const totalActivo = porTipo['activo'] || 0;
+                const utilidadPeriodo = Math.abs(porTipo['ingreso'] || 0) - Math.abs(porTipo['costo'] || 0) - Math.abs(porTipo['gasto'] || 0);
+                const totalPasivoPatrimonio = Math.abs(porTipo['pasivo'] || 0) + Math.abs(porTipo['patrimonio'] || 0) + utilidadPeriodo;
+                const { data: rango } = await supabase
+                    .from('comprobantes')
+                    .select('fecha_contable')
+                    .order('fecha_contable', { ascending: true });
+                const fechas = (rango || []).map((r) => r.fecha_contable).filter(Boolean);
+                setRangoDatos(fechas.length ? { min: fechas[0], max: fechas[fechas.length - 1] } : null);
+                setValidacion({
+                    totalDebe,
+                    totalHaber,
+                    balanceaDebeHaber: Math.abs(totalDebe - totalHaber) < 0.01,
+                    totalActivo,
+                    totalPasivoPatrimonio,
+                    utilidadPeriodo,
+                    balanceaEcuacion: Math.abs(Math.abs(totalActivo) - Math.abs(totalPasivoPatrimonio)) < 0.01,
+                });
+            } catch (err) {
+                console.error('Error validando balanza:', err.message);
+            }
+
+            try {
+                const { data: cf } = await supabase
+                    .from('config_fiscal')
+                    .select('ir_configurado, tasa_ir')
+                    .eq('empresa_id', 1)
+                    .maybeSingle();
+                setConfigFiscal(cf || null);
+            } catch (err) {
+                console.error('Error config_fiscal:', err.message);
+            }
+        };
+        validar();
+    }, [empresaId]);
 
     useEffect(() => {
         const fetchEmpresaInfo = async () => {
@@ -87,14 +143,14 @@ export default function EstadosFinancieros() {
                 p_fecha_corte: fechaInicioReporte
             });
             if (errorAnterior) throw errorAnterior;
-            setCuentasAnteriores(dataAnterior || []);
+            setCuentasAnteriores((dataAnterior || []).map(c => ({ ...c, saldo: Number(c.saldo) || 0 })));
 
             const { data: dataActual, error: errorActual } = await supabase.rpc('sp_get_balance_as_of_date', {
                 p_id_empresa: empresaId,
                 p_fecha_corte: fechaCierre
             });
             if (errorActual) throw errorActual;
-            setCuentasActuales(dataActual || []);
+            setCuentasActuales((dataActual || []).map(c => ({ ...c, saldo: Number(c.saldo) || 0 })));
 
             const { data: dataBalanza, error: errorBalanza } = await supabase.rpc('sp_get_balanza_comprobacion', {
                 p_id_empresa: empresaId,
@@ -290,6 +346,51 @@ export default function EstadosFinancieros() {
                     </div>
                 </div>
             </div>
+
+            {/* Banner de validación contable */}
+            {(validacion || configFiscal !== undefined) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                    <div className={`rounded-xl p-3 border text-sm ${validacion?.balanceaDebeHaber ? "border-green-500/40 bg-green-500/10" : "border-red-500/40 bg-red-500/10"}`}>
+                        <p className="font-semibold text-title">Partida doble (Debe = Haber)</p>
+                        <p className={validacion?.balanceaDebeHaber ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
+                            {validacion ? (validacion.balanceaDebeHaber ? "✓ Cuadra" : "✗ No cuadra") : "..."}
+                        </p>
+                        {validacion && (
+                            <p className="text-subtitle text-xs mt-1">
+                                Debe: C$ {validacion.totalDebe.toFixed(2)} · Haber: C$ {validacion.totalHaber.toFixed(2)}
+                            </p>
+                        )}
+                    </div>
+
+                    <div className={`rounded-xl p-3 border text-sm ${validacion?.balanceaEcuacion ? "border-green-500/40 bg-green-500/10" : "border-red-500/40 bg-red-500/10"}`}>
+                        <p className="font-semibold text-title">Ecuación contable</p>
+                        <p className={validacion?.balanceaEcuacion ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
+                            {validacion ? (validacion.balanceaEcuacion ? "✓ Activo = Pasivo + Patrimonio" : "✗ Descuadre") : "..."}
+                        </p>
+                        {validacion && (
+                            <p className="text-subtitle text-xs mt-1">
+                                Activo: C$ {Math.abs(validacion.totalActivo).toFixed(2)} · Pasivo+Patrimonio+Utilidad: C$ {Math.abs(validacion.totalPasivoPatrimonio).toFixed(2)} (utilidad del período: C$ {Number(validacion.utilidadPeriodo || 0).toFixed(2)})
+                            </p>
+                        )}
+                    </div>
+
+                    <div className={`rounded-xl p-3 border text-sm ${configFiscal?.ir_configurado ? "border-green-500/40 bg-green-500/10" : "border-yellow-500/40 bg-yellow-500/10"}`}>
+                        <p className="font-semibold text-title">Configuración de IR</p>
+                        <p className={configFiscal?.ir_configurado ? "text-green-400 font-bold" : "text-yellow-500 font-bold"}>
+                            {configFiscal?.ir_configurado
+                                ? `✓ Tasa IR: ${Number(configFiscal.tasa_ir || 0)}%`
+                                : "⚠ IR pendiente de configurar"}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {!isLoading && cuentasActuales.length > 0 && cuentasActuales.every(c => Math.abs(Number(c.saldo) || 0) < 0.005) && (
+                <div className="mb-4 rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
+                    ⚠ No hay movimientos contables hasta la fecha de cierre seleccionada ({fechaCierre}).
+                    {rangoDatos && ` Los asientos registrados van del ${rangoDatos.min} al ${rangoDatos.max}. Ajuste el período y presione Generar.`}
+                </div>
+            )}
 
             <Tabs tabs={tabs} activeKey={activeTab} onChange={setActiveTab} />
 

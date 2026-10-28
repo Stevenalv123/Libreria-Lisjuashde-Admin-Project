@@ -49,7 +49,7 @@ const findSaldo = (cuentas, nombres) => {
     cuentas.forEach(cuenta => {
         // 'cuenta.cuenta' viene de la vista 'balance_general_view'
         if (nombresLower.includes(cuenta.cuenta?.toLowerCase())) {
-            total += cuenta.saldo;
+            total += Number(cuenta.saldo) || 0;
         }
     });
     return total;
@@ -136,6 +136,43 @@ export default function AnalisisFinanciero() {
         handleGenerarReporte();
     }, [handleGenerarReporte]);
 
+    // Rango de fechas con asientos contables registrados
+    const [rangoDatos, setRangoDatos] = useState(null);
+    useEffect(() => {
+        (async () => {
+            const { data } = await supabase.from('comprobantes').select('fecha_contable').order('fecha_contable', { ascending: true });
+            const f = (data || []).map(r => r.fecha_contable).filter(Boolean);
+            setRangoDatos(f.length ? { min: f[0], max: f[f.length - 1] } : null);
+        })();
+    }, []);
+
+    const sinMovimientos = cuentasActuales.every(c => Math.abs(Number(c.saldo) || 0) < 0.005);
+
+    const controlesFecha = (
+        <div className="px-6 pb-4 flex flex-wrap items-end gap-3">
+            <div>
+                <label className="block text-xs text-subtitle mb-1">Fecha inicio</label>
+                <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)}
+                    className="bg-input border border-secondary rounded-lg px-3 py-2 text-sm text-title" />
+            </div>
+            <div>
+                <label className="block text-xs text-subtitle mb-1">Fecha cierre</label>
+                <input type="date" value={fechaCierre} onChange={(e) => setFechaCierre(e.target.value)}
+                    className="bg-input border border-secondary rounded-lg px-3 py-2 text-sm text-title" />
+            </div>
+            <button onClick={() => handleGenerarReporte(true)}
+                className="bg-button text-button rounded-lg px-4 py-2 text-sm font-semibold">
+                Generar
+            </button>
+            {rangoDatos && (
+                <button onClick={() => { setFechaInicio(rangoDatos.min); setFechaCierre(getTodayString()); }}
+                    className="border border-secondary rounded-lg px-4 py-2 text-sm text-title">
+                    Usar período con datos ({rangoDatos.min} → hoy)
+                </button>
+            )}
+        </div>
+    );
+
     // --- 3. BLOQUE DE CÁLCULO GIGANTE ---
     const {
         // Ratios
@@ -157,7 +194,12 @@ export default function AnalisisFinanciero() {
     } = useMemo(() => {
 
         // --- Función Interna de Cálculo ---
-        const calcularRatios = (cuentas) => {
+        const calcularRatios = (cuentasRaw) => {
+            const cuentas = (cuentasRaw || []).map(c => ({ ...c, saldo: Number(c.saldo) || 0 }));
+            const suma = (arr) => arr.reduce((s, c) => s + c.saldo, 0);
+            const cod = (c) => String(c.codigo || '');
+            const sub = (c) => String(c.subtipo || '').toLowerCase();
+            const esCorriente = (c, pref) => cod(c).startsWith(pref) || (sub(c).includes('corriente') && !sub(c).includes('no corriente'));
             const activos = cuentas.filter(c => c.tipo === 'Activo');
             const pasivos = cuentas.filter(c => c.tipo === 'Pasivo');
             const patrimonioCuentas = cuentas.filter(c => c.tipo === 'Patrimonio');
@@ -166,39 +208,29 @@ export default function AnalisisFinanciero() {
             const gastos = cuentas.filter(c => c.tipo === 'Gasto');
 
             // P&L (Saldos YTD)
-            const totalVentas = Math.abs(findSaldo(ingresos, ["Ventas"]));
-            const totalCostosVenta = findSaldo(costos, ["Costo de Venta"]);
+            const totalVentas = Math.abs(suma(ingresos));
+            const totalCostosVenta = Math.abs(suma(costos));
             const utilidadBruta = totalVentas - totalCostosVenta;
-            const totalGastosOp = findSaldo(gastos, ["Gasto por Depreciación", "Otros Gastos"]);
+            const totalGastosOp = Math.abs(suma(gastos));
+            const utilidadContable = utilidadBruta - totalGastosOp;
             const utilidadOperativa = utilidadBruta - totalGastosOp;
             const impuestoIR = utilidadOperativa > 0 ? utilidadOperativa * 0.3 : 0;
             const utilidadNeta = utilidadOperativa - impuestoIR;
 
             // Balance
-            const totalActivoCorriente = activos
-                .filter(c => c.subtipo && c.subtipo.includes('Corriente') && !c.subtipo.includes('No'))
-                .reduce((sum, c) => sum + c.saldo, 0);
-            const totalActivoNoCorriente = activos
-                .filter(c => c.subtipo && (c.subtipo.includes('No Corriente') || c.subtipo.includes('Fijo')))
-                .reduce((sum, c) => sum + c.saldo, 0);
-            const totalActivos = totalActivoCorriente + totalActivoNoCorriente;
+            const totalActivos = suma(activos);
+            const totalActivoCorriente = suma(activos.filter(c => esCorriente(c, '1.1')));
+            const totalActivoNoCorriente = totalActivos - totalActivoCorriente;
 
-            const totalPasivoCorriente = Math.abs(pasivos
-                .filter(c => c.subtipo && c.subtipo.includes('Corriente') && !c.subtipo.includes('No'))
-                .reduce((sum, c) => sum + c.saldo, 0));
-            const totalPasivoNoCorriente = Math.abs(pasivos
-                .filter(c => c.subtipo && (c.subtipo.includes('No Corriente') || c.subtipo.includes('Largo')))
-                .reduce((sum, c) => sum + c.saldo, 0));
-            const totalPasivos = totalPasivoCorriente + totalPasivoNoCorriente;
+            const totalPasivos = Math.abs(suma(pasivos));
+            const totalPasivoCorriente = Math.abs(suma(pasivos.filter(c => esCorriente(c, '2.1'))));
 
-            const totalPatrimonioCuentas = Math.abs(patrimonioCuentas.reduce((sum, c) => sum + c.saldo, 0));
-            // La Utilidad Neta del balance ya está incluida en la BBDD
-            const utilidadNetaBalance = findSaldo(patrimonioCuentas, ["Utilidad (o Pérdida) del Período"]) || utilidadNeta;
-            const totalPatrimonio = totalPatrimonioCuentas; // El totalPatrimonioCuentas ya incluye la utilidad
+            // Patrimonio + utilidad del período aún no cerrada a resultados acumulados
+            const totalPatrimonio = Math.abs(suma(patrimonioCuentas)) + utilidadContable;
 
             // Cuentas Específicas
-            const inventario = findSaldo(activos, ["Inventario"]);
-            const cxc = findSaldo(activos, ["Clientes"]);
+            const inventario = suma(activos.filter(c => cod(c).startsWith('1.1.04') || String(c.cuenta || '').toLowerCase().includes('inventario')));
+            const cxc = suma(activos.filter(c => cod(c).startsWith('1.1.03') || /client|cobrar/i.test(String(c.cuenta || ''))));
             const cxcProveedores = Math.abs(findSaldo(pasivos, ["Proveedores"]));
             const activosFijosNetos = totalActivoNoCorriente;
 
@@ -233,37 +265,38 @@ export default function AnalisisFinanciero() {
         const activosTotalesPromedio = calcPromedio(actualYTD.totalActivos, anteriorYTD.totalActivos);
 
         // --- CÁLCULO DE TODOS LOS RATIOS (Usando Balances 'actualYTD' y P&L 'periodo') ---
-        const d = (den) => (den === 0 ? 0 : den); // Evitar división por cero
+        // División segura: si el denominador es 0 o inválido, el resultado es 0 (evita NaN/Infinity)
+        const div = (a, b) => (!b || !isFinite(b) || !isFinite(a)) ? 0 : a / b;
 
         // 1. Liquidez (usa Balance actual)
-        const liquidezCorriente = actualYTD.totalActivoCorriente / d(actualYTD.totalPasivoCorriente);
-        const razonRapida = (actualYTD.totalActivoCorriente - actualYTD.inventario) / d(actualYTD.totalPasivoCorriente);
+        const liquidezCorriente = div(actualYTD.totalActivoCorriente, actualYTD.totalPasivoCorriente);
+        const razonRapida = div(actualYTD.totalActivoCorriente - actualYTD.inventario, actualYTD.totalPasivoCorriente);
         // 2. Capital de Trabajo
         const cnt = actualYTD.totalActivoCorriente - actualYTD.totalPasivoCorriente;
         const cno = (actualYTD.cxc + actualYTD.inventario) - actualYTD.cxcProveedores;
         // 3. Actividad (usa P&L del periodo / Balances promedio)
-        const rotacionInventarios = periodoCostosVenta / d(inventarioPromedio);
-        const periodoInventarios = 360 / d(rotacionInventarios);
-        const rotacionCxC = periodoVentas / d(cxcPromedio);
-        const periodoCxC = 360 / d(rotacionCxC);
-        const rotacionActivosFijos = periodoVentas / d(activosFijosPromedio);
-        const rotacionActivosTotales = periodoVentas / d(activosTotalesPromedio);
+        const rotacionInventarios = div(periodoCostosVenta, inventarioPromedio);
+        const periodoInventarios = div(360, rotacionInventarios);
+        const rotacionCxC = div(periodoVentas, cxcPromedio);
+        const periodoCxC = div(360, rotacionCxC);
+        const rotacionActivosFijos = div(periodoVentas, activosFijosPromedio);
+        const rotacionActivosTotales = div(periodoVentas, activosTotalesPromedio);
         // 4. Endeudamiento (usa Balance actual)
-        const endeudamiento = actualYTD.totalPasivos / d(actualYTD.totalActivos);
-        const razonPasivoCapital = actualYTD.totalPasivos / d(actualYTD.totalPatrimonio);
+        const endeudamiento = div(actualYTD.totalPasivos, actualYTD.totalActivos);
+        const razonPasivoCapital = div(actualYTD.totalPasivos, actualYTD.totalPatrimonio);
         // 5. Rentabilidad (usa P&L del periodo)
-        const margenBruto = (periodoUtilidadBruta / d(periodoVentas)) * 100;
-        const margenOperativo = (periodoUtilidadOperativa / d(periodoVentas)) * 100;
-        const margenNeto = (periodoUtilidadNeta / d(periodoVentas)) * 100;
-        const roa = (periodoUtilidadNeta / d(actualYTD.totalActivos)) * 100;
-        const roe = (periodoUtilidadNeta / d(actualYTD.totalPatrimonio)) * 100;
+        const margenBruto = (div(periodoUtilidadBruta, periodoVentas)) * 100;
+        const margenOperativo = (div(periodoUtilidadOperativa, periodoVentas)) * 100;
+        const margenNeto = (div(periodoUtilidadNeta, periodoVentas)) * 100;
+        const roa = (div(periodoUtilidadNeta, actualYTD.totalActivos)) * 100;
+        const roe = (div(periodoUtilidadNeta, actualYTD.totalPatrimonio)) * 100;
         // 6. DuPont (usa P&L del periodo y Balance actual)
         const dupontMargenNeto = margenNeto;
-        const dupontRotacionActivos = periodoVentas / d(actualYTD.totalActivos);
-        const dupontApalancamiento = actualYTD.totalActivos / d(actualYTD.totalPatrimonio);
+        const dupontRotacionActivos = div(periodoVentas, actualYTD.totalActivos);
+        const dupontApalancamiento = div(actualYTD.totalActivos, actualYTD.totalPatrimonio);
 
         // --- LÓGICA DE PUNTUACIÓN E INTERPRETACIÓN ---
-        const score = (valor, optimo) => Math.max(0, 100 - (Math.abs(valor - optimo) / optimo) * 100);
+        const score = (valor, optimo) => (!isFinite(valor) || valor === 0) ? 0 : Math.max(0, 100 - (Math.abs(valor - optimo) / optimo) * 100);
         const liquidezScore = score(liquidezCorriente, INDUSTRY_AVERAGES.liquidezCorriente);
         const endeudamientoScore = score(endeudamiento, INDUSTRY_AVERAGES.endeudamiento);
         const rentabilidadScore = score(roe, INDUSTRY_AVERAGES.roe);
@@ -281,7 +314,7 @@ export default function AnalisisFinanciero() {
         const rentabilidadStatus = getStatus(rentabilidadScore);
 
         const liquidezInterpretation = `Ratio Corriente: ${liquidezCorriente.toFixed(2)} (vs Ind. ${INDUSTRY_AVERAGES.liquidezCorriente}). Rápida: ${razonRapida.toFixed(2)} (vs Ind. ${INDUSTRY_AVERAGES.razonRapida}).`;
-        const endeudamientoInterpretation = `Nivel Endeudamiento: ${endeudamiento.toFixed(1)}% (vs Ind. ${INDUSTRY_AVERAGES.endeudamiento * 100}%)`;
+        const endeudamientoInterpretation = `Nivel Endeudamiento: ${(endeudamiento * 100).toFixed(1)}% (vs Ind. ${INDUSTRY_AVERAGES.endeudamiento * 100}%)`;
         const rentabilidadInterpretation = `ROE: ${roe.toFixed(1)}% (vs Ind. ${INDUSTRY_AVERAGES.roe.toFixed(1)}%). Margen Neto: ${margenNeto.toFixed(1)}% (vs Ind. ${INDUSTRY_AVERAGES.margenNeto.toFixed(1)}%).`;
 
         // --- Datos para Gráficos ---
@@ -293,7 +326,7 @@ export default function AnalisisFinanciero() {
         const barChartData = [
             { name: "Liquidez C.", "Tu Empresa": parseFloat(liquidezCorriente.toFixed(2)), Industria: INDUSTRY_AVERAGES.liquidezCorriente },
             { name: "Rápida", "Tu Empresa": parseFloat(razonRapida.toFixed(2)), Industria: INDUSTRY_AVERAGES.razonRapida },
-            { name: "Endeudamiento", "Tu Empresa": parseFloat(endeudamiento.toFixed(1)) * 100, Industria: INDUSTRY_AVERAGES.endeudamiento * 100 },
+            { name: "Endeudamiento", "Tu Empresa": parseFloat((endeudamiento * 100).toFixed(1)), Industria: INDUSTRY_AVERAGES.endeudamiento * 100 },
             { name: "Margen Neto", "Tu Empresa": parseFloat(margenNeto.toFixed(1)), Industria: INDUSTRY_AVERAGES.margenNeto },
             { name: "ROE", "Tu Empresa": parseFloat(roe.toFixed(1)), Industria: INDUSTRY_AVERAGES.roe },
             { name: "ROA", "Tu Empresa": parseFloat(roa.toFixed(1)), Industria: INDUSTRY_AVERAGES.roa },
@@ -329,16 +362,22 @@ export default function AnalisisFinanciero() {
         );
     }
 
-    if (cuentasActuales.length === 0 && !isLoading) {
+    if (sinMovimientos && !isLoading) {
         return (
-            <div className="p-6">
-                <div className="p-6 border border-secondary rounded-xl bg-secondary/10 text-center">
-                    <Info className="mx-auto mb-4" />
-                    <h2 className="text-xl font-semibold mb-2">No hay datos para analizar</h2>
-                    <p className="text-subtitle">
-                        Por favor, ve a la pestaña "Estados Financieros", selecciona un rango
-                        de fechas y presiona "Generar" para ver el análisis.
-                    </p>
+            <div>
+                <div className="p-6 pb-3">
+                    <h1 className="text-2xl font-bold mb-1">Análisis Financiero</h1>
+                </div>
+                {controlesFecha}
+                <div className="px-6">
+                    <div className="p-6 border border-secondary rounded-xl bg-secondary/10 text-center">
+                        <Info className="mx-auto mb-4" />
+                        <h2 className="text-xl font-semibold mb-2">No hay movimientos contables en el período seleccionado</h2>
+                        <p className="text-subtitle">
+                            Fecha de cierre: {fechaCierre}.
+                            {rangoDatos ? ` Los asientos registrados van del ${rangoDatos.min} al ${rangoDatos.max}.` : ' Aún no hay asientos registrados.'}
+                        </p>
+                    </div>
                 </div>
             </div>
         );
@@ -349,9 +388,10 @@ export default function AnalisisFinanciero() {
             <div className="p-6">
                 <h1 className="text-2xl font-bold mb-1">Análisis Financiero</h1>
                 <p className="text-subtitle">
-                    Empresa: {empresaInfo ? empresaInfo.nombre : 'Cargando...'} | Moneda: {empresaInfo ? empresaInfo.moneda.simbolo : 'N/A'}
+                    Empresa: {empresaInfo ? empresaInfo.nombre : 'Cargando...'} | Moneda: {empresaInfo?.moneda?.simbolo || 'C$'}
                 </p>
             </div>
+            {controlesFecha}
 
             {/* --- BLOQUE DE DIAGNÓSTICO --- */}
             <div className="p-6 border border-secondary rounded-xl bg-secondary/10">

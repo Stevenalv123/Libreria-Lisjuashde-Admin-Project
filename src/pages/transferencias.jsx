@@ -11,7 +11,8 @@ import Swal from "sweetalert2";
 const EMPRESA_ID = 1;
 
 export default function Transferencias() {
-  const { user, perfil } = useAuth();
+  const { user, perfil, rol } = useAuth();
+  const esSuperadmin = rol === "superadmin";
   const [transferencias, setTransferencias] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [productos, setProductos] = useState([]);
@@ -46,7 +47,8 @@ export default function Transferencias() {
   }, [cargar]);
 
   const abrirModal = () => {
-    setForm({ origen: "", destino: "", motivo: "" });
+    // El gerente/admin sólo puede transferir DESDE su propia sucursal.
+    setForm({ origen: esSuperadmin ? "" : (perfil?.id_sucursal ? String(perfil.id_sucursal) : ""), destino: "", motivo: "" });
     setLineas([]);
     setProdSel("");
     setCantSel(1);
@@ -73,24 +75,24 @@ export default function Transferencias() {
 
     setGuardando(true);
     try {
-      const { data: transf, error: errT } = await supabase
-        .from("transferencias_sucursal")
-        .insert([{ id_sucursal_origen: Number(form.origen), id_sucursal_destino: Number(form.destino), id_usuario: user.id, motivo: form.motivo, estado: "pendiente", id_empresa: EMPRESA_ID }])
-        .select()
-        .single();
-      if (errT) throw errT;
+      // sp_transferir_stock crea la transferencia, mueve el stock entre sucursales
+      // y registra el detalle de forma atómica (estado = Completada).
+      const items = lineas.map((l) => ({ id_producto: l.id_producto, cantidad: l.cantidad }));
+      const { data: idTransf, error } = await supabase.rpc("sp_transferir_stock", {
+        p_origen: Number(form.origen),
+        p_destino: Number(form.destino),
+        p_items: items,
+        p_motivo: form.motivo || null,
+      });
+      if (error) throw error;
 
-      const detalle = lineas.map((l) => ({ id_transferencia: transf.id, id_producto: l.id_producto, cantidad: l.cantidad, costo_unitario: l.costo_unitario }));
-      const { error: errD } = await supabase.from("detalle_transferencia").insert(detalle);
-      if (errD) throw errD;
-
-      await registrarAuditoria(supabase, perfil, "CREAR", "Transferencias", `Creó transferencia #${transf.id} (${lineas.length} productos)`);
-      toast.success("Transferencia creada (pendiente de recepción).");
+      await registrarAuditoria(supabase, perfil, "TRANSFERIR", "Transferencias", `Transfirió stock #${idTransf} (${lineas.length} productos)`);
+      toast.success("Transferencia realizada y stock actualizado.");
       setIsModalOpen(false);
       cargar();
     } catch (err) {
       console.error(err);
-      toast.error("Error al crear transferencia: " + err.message);
+      Swal.fire({ icon: "error", title: "No se pudo transferir", text: err.message, background: "#152235", color: "#fff" });
     } finally {
       setGuardando(false);
     }
@@ -117,7 +119,8 @@ export default function Transferencias() {
     cargar();
   };
 
-  const pendientes = transferencias.filter((t) => t.estado === "pendiente").length;
+  const esPendiente = (t) => (t.estado || "").toLowerCase() === "pendiente";
+  const pendientes = transferencias.filter(esPendiente).length;
 
   return (
     <div>
@@ -165,12 +168,12 @@ export default function Transferencias() {
                     <td className="py-3 px-2 text-center">{(t.detalle || []).reduce((s, x) => s + x.cantidad, 0)}</td>
                     <td className="py-3 px-2 text-subtitle max-w-xs truncate">{t.motivo || "—"}</td>
                     <td className="py-3 px-2 text-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${t.estado === "pendiente" ? "bg-yellow-600/20 text-yellow-400" : "bg-green-600/20 text-green-400"}`}>
-                        {t.estado === "pendiente" ? "Pendiente" : "Completada"}
+                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${esPendiente(t) ? "bg-yellow-600/20 text-yellow-400" : "bg-green-600/20 text-green-400"}`}>
+                        {esPendiente(t) ? "Pendiente" : "Completada"}
                       </span>
                     </td>
                     <td className="py-3 px-2 text-center">
-                      {t.estado === "pendiente" ? (
+                      {esPendiente(t) ? (
                         <button onClick={() => confirmarRecepcion(t)} className="text-green-400 hover:text-green-300 flex items-center gap-1 mx-auto" title="Confirmar recepción">
                           <CheckCircle size={18} />
                         </button>
@@ -198,10 +201,11 @@ export default function Transferencias() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium">Sucursal Origen *</label>
-                <select value={form.origen} onChange={(e) => setForm({ ...form, origen: e.target.value })} className="bg-input border border-secondary rounded-lg p-3">
+                <select value={form.origen} onChange={(e) => setForm({ ...form, origen: e.target.value })} disabled={!esSuperadmin} className="bg-input border border-secondary rounded-lg p-3 disabled:opacity-60">
                   <option value="">Seleccione</option>
                   {sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
+                {!esSuperadmin && <span className="text-xs text-subtitle">Solo puedes transferir desde tu sucursal.</span>}
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium">Sucursal Destino *</label>

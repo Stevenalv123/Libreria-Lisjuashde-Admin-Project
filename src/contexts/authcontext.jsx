@@ -18,7 +18,7 @@ export const AuthProvider = ({ children }) => {
       );
       const queryPromise = supabase
         .from("perfiles")
-        .select("id, nombre_completo, email, telefono, rol, id_empresa, id_sucursal, activo")
+        .select("id, nombre_completo, email, telefono, rol, id_empresa, id_sucursal, activo, avatar_url")
         .eq("id", userId)
         .single();
       const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
@@ -138,6 +138,22 @@ export const AuthProvider = ({ children }) => {
     setPerfil(null);
   };
 
+  // Actualiza campos editables del propio perfil (nombre, teléfono, avatar).
+  const actualizarPerfil = async (cambios) => {
+    const uid = session?.user?.id;
+    if (!uid) return { success: false, error: "Sin sesión activa" };
+    const permitidos = {};
+    ["nombre_completo", "telefono", "avatar_url"].forEach((k) => {
+      if (k in cambios) permitidos[k] = cambios[k];
+    });
+    const { error } = await supabase.from("perfiles").update(permitidos).eq("id", uid);
+    if (error) return { success: false, error: error.message };
+    const nuevo = { ...(perfilRef.current || {}), ...permitidos };
+    perfilRef.current = nuevo;
+    setPerfil(nuevo);
+    return { success: true };
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -149,6 +165,7 @@ export const AuthProvider = ({ children }) => {
         loginUser,
         signUpStaff,
         logoutUser,
+        actualizarPerfil,
       }}
     >
       {children}

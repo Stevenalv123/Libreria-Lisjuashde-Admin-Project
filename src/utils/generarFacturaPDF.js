@@ -33,6 +33,9 @@ export function generarFacturaPDF(datos, modo = "open") {
         items = [],
         plazoDias = 0,
         vencimiento = "",
+        sucursal = "",          // nombre de la sucursal
+        canal = "sucursal",     // 'sucursal' | 'web'
+        pago = "sucursal",      // 'sucursal' | 'web' (dónde/cómo se pagó)
     } = datos || {};
 
     const doc = new jsPDF();
@@ -47,26 +50,41 @@ export function generarFacturaPDF(datos, modo = "open") {
     doc.setFont("helvetica", "normal");
     doc.text(EMPRESA.direccion, pageWidth / 2, 25, { align: "center" });
     doc.text(EMPRESA.ruc, pageWidth / 2, 30, { align: "center" });
+    if (sucursal) {
+        doc.setFont("helvetica", "bold");
+        doc.text(`Sucursal: ${sucursal}`, pageWidth / 2, 35, { align: "center" });
+        doc.setFont("helvetica", "normal");
+    }
 
+    const lineaY = sucursal ? 39 : 34;
     doc.setDrawColor(200);
-    doc.line(14, 34, pageWidth - 14, 34);
+    doc.line(14, lineaY, pageWidth - 14, lineaY);
+
+    // --- Origen / forma de pago ---
+    const pagoTxt = pago === "web" ? "Pago web" : "Pago en sucursal";
+    const origenTxt = canal === "web"
+        ? `Pedido web – Retiro en sucursal ${sucursal || ""}`.trim()
+        : `Venta en sucursal ${sucursal || ""}`.trim();
+
+    const baseY = lineaY + 6;
 
     // --- Datos de factura ---
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("FACTURA", 14, 44);
+    doc.text("FACTURA", 14, baseY + 4);
 
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text(`N° Factura: ${numeroFactura}`, 14, 52);
-    doc.text(`Fecha: ${fecha}`, 14, 58);
-    if (tipoPago) doc.text(`Tipo de pago: ${tipoPago}`, 14, 64);
+    doc.text(`N° Factura: ${numeroFactura}`, 14, baseY + 12);
+    doc.text(`Fecha: ${fecha}`, 14, baseY + 18);
+    if (tipoPago) doc.text(`Tipo de pago: ${tipoPago}`, 14, baseY + 24);
+    doc.text(`${origenTxt} — ${pagoTxt}`, 14, baseY + 30);
 
-    doc.text(`Cliente: ${cliente}`, pageWidth - 14, 52, { align: "right" });
-    if (identificacion) doc.text(`Identificación: ${identificacion}`, pageWidth - 14, 58, { align: "right" });
+    doc.text(`Cliente: ${cliente}`, pageWidth - 14, baseY + 12, { align: "right" });
+    if (identificacion) doc.text(`Identificación: ${identificacion}`, pageWidth - 14, baseY + 18, { align: "right" });
     if (plazoDias > 0) {
-        doc.text(`Plazo: ${plazoDias} días`, pageWidth - 14, 64, { align: "right" });
-        if (vencimiento) doc.text(`Vence: ${vencimiento}`, pageWidth - 14, 70, { align: "right" });
+        doc.text(`Plazo: ${plazoDias} días`, pageWidth - 14, baseY + 24, { align: "right" });
+        if (vencimiento) doc.text(`Vence: ${vencimiento}`, pageWidth - 14, baseY + 30, { align: "right" });
     }
 
     // --- Tabla de productos ---
@@ -87,7 +105,7 @@ export function generarFacturaPDF(datos, modo = "open") {
     });
 
     autoTable(doc, {
-        startY: 76,
+        startY: baseY + 36,
         head: [["Producto", "Cant.", "Precio", "Desc.", "Subtotal"]],
         body,
         theme: "striped",

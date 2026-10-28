@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabase/supabaseclient";
 import { useEmpresa } from "../contexts/empresacontext";
+import { useAuth } from "../contexts/authcontext";
 
 // Mapea el método de pago del pedido web al valor que espera sp_registrar_venta.
 const mapTipoPago = (metodo) => {
@@ -14,6 +15,8 @@ const mapTipoPago = (metodo) => {
 
 export function usePedidosWeb() {
   const { empresaId } = useEmpresa();
+  const { perfil, rol } = useAuth();
+  const esSuperadmin = rol === "superadmin";
   const [pedidos, setPedidos] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -26,13 +29,20 @@ export function usePedidosWeb() {
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("pedidos_web")
         .select(
-          "id_pedido, numero_orden, id_empresa, user_id, nombre_cliente, telefono, email, total, metodo_pago, tipo_entrega, notas, estado, id_venta, created_at, pedidos_web_items ( id_item, id_producto, nombre, cantidad, precio_unitario, imagen )"
+          "id_pedido, numero_orden, id_empresa, id_sucursal, user_id, nombre_cliente, telefono, email, total, metodo_pago, tipo_entrega, notas, estado, estado_pago, id_venta, created_at, sucursal:sucursales(nombre), pedidos_web_items ( id_item, id_producto, nombre, cantidad, precio_unitario, imagen )"
         )
         .eq("id_empresa", empresaId)
         .order("created_at", { ascending: false });
+
+      // Alcance por sucursal: el superadmin ve todas; el resto, solo la suya.
+      if (!esSuperadmin && perfil?.id_sucursal) {
+        query = query.eq("id_sucursal", perfil.id_sucursal);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setPedidos(data || []);
@@ -43,7 +53,7 @@ export function usePedidosWeb() {
     } finally {
       setIsLoading(false);
     }
-  }, [empresaId]);
+  }, [empresaId, esSuperadmin, perfil]);
 
   useEffect(() => {
     fetchPedidos();
@@ -61,6 +71,23 @@ export function usePedidosWeb() {
       return true;
     } catch (err) {
       console.error("Error actualizando pedido:", err.message);
+      setError(err.message);
+      return false;
+    }
+  };
+
+  // Actualiza únicamente el estado de pago del pedido (Pendiente/Simulado/Confirmado).
+  const cambiarEstadoPago = async (idPedido, nuevoEstadoPago) => {
+    try {
+      const { error } = await supabase
+        .from("pedidos_web")
+        .update({ estado_pago: nuevoEstadoPago })
+        .eq("id_pedido", idPedido);
+      if (error) throw error;
+      await fetchPedidos();
+      return true;
+    } catch (err) {
+      console.error("Error actualizando estado de pago:", err.message);
       setError(err.message);
       return false;
     }
@@ -93,6 +120,9 @@ export function usePedidosWeb() {
 
       if (rpcError) throw rpcError;
 
+      // Marcar la venta como canal web (el inventario ya se descontó en la sucursal de contexto).
+      await supabase.from("ventas").update({ canal: "web" }).eq("id_venta", idVenta);
+
       const { error: updError } = await supabase
         .from("pedidos_web")
         .update({ estado: "Listo", id_venta: idVenta })
@@ -110,5 +140,5 @@ export function usePedidosWeb() {
     }
   };
 
-  return { pedidos, isLoading, error, fetchPedidos, cambiarEstado, aceptarPedido };
+  return { pedidos, isLoading, error, fetchPedidos, cambiarEstado, cambiarEstadoPago, aceptarPedido };
 }
